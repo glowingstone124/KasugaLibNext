@@ -1,161 +1,104 @@
 plugins {
     id 'java-library'
-    id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.107'
-    id("com.gradleup.shadow") version '9.0.2'
-    id 'idea'
+    id 'net.neoforged.moddev'
+    id 'com.gradleup.shadow' version '9.0.2'
 }
 
-version = mod_version
 group = mod_group_id
+version = "${mod_version}+mc26.3"
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    withSourcesJar()
+}
 
 repositories {
-    // Add here additional repositories if required by some of the dependencies below.
-    maven { url = "https://maven.createmod.net" } // Create, Ponder, Flywheel
-    maven { url = "https://maven.ithundxr.dev/snapshots" } // Registrate
+    mavenCentral()
+    maven { url = 'https://libraries.minecraft.net' }
 }
 
+sourceSets {
+    contentTesting {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
 
 configurations {
-    shadowLibrary
-    implementation.extendsFrom shadowLibrary
+    bundledLibrary
 }
 
-test {
-    useJUnitPlatform()
+dependencies {
+    api(project(':modules:render-core')) { transitive = false }
+    api(project(':modules:formula')) { transitive = false }
+    api(project(':modules:utils')) { transitive = false }
+    runtimeOnly 'de.javagl:jgltf-model:2.0.4'
+    runtimeOnly 'de.javagl:jgltf-impl-v2:2.0.4'
+    bundledLibrary(project(':modules:render-core')) { transitive = false }
+    bundledLibrary(project(':modules:formula')) { transitive = false }
+    bundledLibrary(project(':modules:utils')) { transitive = false }
+    bundledLibrary 'de.javagl:jgltf-model:2.0.4'
+    bundledLibrary 'de.javagl:jgltf-impl-v2:2.0.4'
 }
-
-
-// Mojang ships Java 21 to end users in 1.21.1, so mods should target Java 21.
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 neoForge {
-    // Specify the version of NeoForge to use.
-    version = project.neo_version
-
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
+    version = project.neo_version_26_3
 
     runs {
         client {
             client()
-
-            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            String graphicsSmoke = providers.gradleProperty('kasugaGraphicsSmoke').getOrElse('')
+            if (!(graphicsSmoke in ['', 'vulkan', 'opengl'])) {
+                throw new GradleException("Unknown graphics API for the smoke client: ${graphicsSmoke}")
+            }
+            gameDirectory = file(graphicsSmoke.isEmpty() ? 'run/26.3-client' : "run/26.3-smoke-${graphicsSmoke}")
+            if (!graphicsSmoke.isEmpty()) {
+                programArguments.addAll '--width', '960', '--height', '540',
+                        '--graphicsBackend', graphicsSmoke.toUpperCase(Locale.ROOT)
+                systemProperty 'kasuga.graphicsSmoke', graphicsSmoke
+            }
         }
-
         server {
             server()
+            gameDirectory = file('run/26.3-server')
             programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        gameTestServer {
-            type = "gameTestServer"
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        data {
-            data()
-            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
-        }
-
-        // applies to all the run configs above
-        configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-
-            logLevel = org.slf4j.event.Level.DEBUG
         }
     }
 
     mods {
         "${mod_id}" {
-            // Inlcude the core subproject as a dependency.
-            sourceSet(project(':modules:core').sourceSets.main)
-            sourceSet(sourceSets.main)
+            sourceSet sourceSets.main
+            sourceSet sourceSets.contentTesting
         }
     }
 }
 
-configurations {
-    runtimeClasspath.extendsFrom localRuntime
-}
-
-dependencies {
-    implementation ("io.micronaut:micronaut-inject:4.9.10") {
-        exclude group : 'org.slf4j', module: 'slf4j-api'
-    }
-
-    additionalRuntimeClasspath ("io.micronaut:micronaut-inject:4.9.10") {
-        exclude group : 'org.slf4j', module: 'slf4j-api'
-    }
-
-    additionalRuntimeClasspath ("io.micronaut:micronaut-aop:4.9.10") {
-        exclude group : 'org.slf4j', module: 'slf4j-api'
-    }
-
-    implementation project(":modules:inject")
-    additionalRuntimeClasspath project(":modules:inject")
-
-    annotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
-
-
-    implementation("com.simibubi.create:create-${minecraft_version}:${create_version}:slim") { transitive = false }
-    implementation("net.createmod.ponder:Ponder-NeoForge-${minecraft_version}:${ponder_version}")
-    compileOnly("dev.engine-room.flywheel:flywheel-neoforge-api-${minecraft_version}:${flywheel_version}")
-    runtimeOnly("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}")
-    implementation("com.tterrag.registrate:Registrate:${registrate_version}")
-
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-}
-
-// This block of code expands all declared replace properties in the specified resource targets.
-// A missing property will result in an error. Properties are expanded using ${} Groovy notation.
-var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
-    var replaceProperties = [
-            minecraft_version      : minecraft_version,
-            minecraft_version_range: minecraft_version_range,
-            neo_version            : neo_version,
+def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    Map properties = [
+            minecraft_version_range: '[26.3]',
+            neo_version            : neo_version_26_3,
             loader_version_range   : loader_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
             mod_license            : mod_license,
-            mod_version            : mod_version,
+            mod_version            : project.version,
             mod_authors            : mod_authors,
             mod_description        : mod_description
     ]
-    inputs.properties replaceProperties
-    expand replaceProperties
-    from "src/main/templates"
-    into "build/generated/sources/modMetadata"
+    inputs.properties properties
+    expand properties
+    from 'src/main/templates'
+    into layout.buildDirectory.dir('generated/sources/modMetadata')
 }
-// Include the output of "generateModMetadata" as an input directory for the build
-// this works with both building through Gradle and the IDE.
 sourceSets.main.resources.srcDir generateModMetadata
-// To avoid having to run "generateModMetadata" manually, make it run on every project reload
 neoForge.ideSyncTask generateModMetadata
 
-// Example configuration to allow publishing using the maven-publish plugin
-publishing {
-    publications {
-        register('mavenJava', MavenPublication) {
-            from components.java
-        }
-    }
-    repositories {
-        maven {
-            url "file://${project.projectDir}/repo"
-        }
-    }
+tasks.named('shadowJar') {
+    configurations = [project.configurations.bundledLibrary]
+    mergeServiceFiles()
+    relocate 'de.javagl', 'lib.kasuga.vendors.javagl'
+    relocate 'com.fasterxml.jackson', 'lib.kasuga.vendors.jackson'
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class', 'META-INF/versions/*/module-info.class'
 }
 
-shadowJar {
-    zip64 = true
-}
-
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
-}
+tasks.named('assemble') { dependsOn 'shadowJar' }

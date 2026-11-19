@@ -1,34 +1,47 @@
 pluginManagement {
+    String minecraftTarget = providers.gradleProperty('kasugaMinecraft').getOrElse('1.21.1')
+    plugins {
+        id 'net.neoforged.moddev' version (minecraftTarget == '26.3' ? '2.0.148' : '2.0.107')
+    }
     repositories {
         gradlePluginPortal()
     }
 }
 
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.9.0'
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
 }
 
 rootProject.name = 'KasugaLibNext'
 
 includeBuild './modules/gradle-plugin'
+String minecraftTarget = providers.gradleProperty('kasugaMinecraft').getOrElse('1.21.1')
+if (!(minecraftTarget in ['1.21.1', '26.3'])) {
+    throw new GradleException("Unsupported KasugaLib Minecraft target: ${minecraftTarget}")
+}
+
 include ':modules:utils'
 include ':modules:formula'
-include ':modules:core'
-include ':modules:data-driven'
-include ':modules:inject'
-include ':modules:create'
-include ':modules:scripting'
-include ':modules:modelling'
-include ':modules:generator'
-include ':modules:multiversion'
-include ':modules:annotations'
-include ':modules:library'
 include ':modules:resource-compiler'
 include ':modules:shader'
 include ':modules:shader-graal'
 include ':modules:render-core'
-include ':modules:render-opengl'
-include ':external:slp:javet'
-include ':external:uip:ldlib'
-include ':external:uip:ldlib-compose'
-include ':external:uip:modernui'
+
+if (minecraftTarget == '26.3') {
+    include ':modules:multiversion'
+} else {
+    include ':modules:render-opengl'
+    include ':modules:core'
+    include ':modules:data-driven'
+    include ':modules:inject'
+    include ':modules:create'
+    include ':modules:scripting'
+    include ':modules:modelling'
+    include ':modules:generator'
+    include ':modules:annotations'
+    include ':modules:library'
+    include ':external:slp:javet'
+    include ':external:uip:ldlib'
+    include ':external:uip:ldlib-compose'
+    include ':external:uip:modernui'
+}

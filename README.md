@@ -49,6 +49,39 @@ Optional world-wide volumetric skies, placeable cumulonimbus volumes and standal
 The [Nebula demo](doc/guides/nebula-demo.md) combines graph-managed MRT, OBJ/PBR assets,
 volumetric warp effects and shared camera animation, with deterministic 4K60 recording.
 
+## Minecraft build targets
+
+The default target builds the Minecraft 1.21.1 library with Java 21. Minecraft 26.3 uses
+Java 25 and NeoForge 26.3.0.109.
+
+```bash
+./gradlew :modules:library:assemble
+./gradlew -PkasugaMinecraft=26.3 :modules:multiversion:assemble
+```
+
+The 26.3 distributable is the `-all.jar` in `modules/multiversion/build/26.3/libs`.
+It includes the portable model, animation and geometry libraries plus
+`RenderPearlWorldModels`. Mount a `ModelInstance` in the current client level,
+supply its world position and a texture-to-`Identifier` mapping, and update the
+mount's placement as needed. Close the mount when it should leave the world.
+The model and textures remain caller-owned.
+
+Model rendering uses the Minecraft entity pipelines on the active graphics
+backend. The 26.3 target currently covers world model submission with CPU skinning.
+The 1.21.1 library contains the Create and UI integrations, custom world effects,
+GPU skinning, and the other Minecraft host APIs that still need a 26.3 port.
+
+The 26.3 development client can check both graphics backends using an isolated test
+world and framebuffer readback. The test selects and checks the requested backend:
+
+```bash
+./gradlew -PkasugaMinecraft=26.3 -PkasugaGraphicsSmoke=vulkan :modules:multiversion:runClient
+```
+
+Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing
+run logs `KASUGA_RENDERPEARL_PASS` and saves `kasuga-renderpearl-smoke.png` in
+the test game directory.
+
 Run the focused release gate with:
 
 ```bash

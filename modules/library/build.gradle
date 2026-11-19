@@ -158,10 +158,10 @@ dependencies {
     // be embedded separately, as they are not provided by Minecraft.
     shadowLibrary 'de.javagl:jgltf-model:2.0.4'
     shadowLibrary 'de.javagl:jgltf-impl-v2:2.0.4'
-    shadowLibrary files(project(':modules:render-core').file('libs/caliko-1.3.8.jar'))
+    shadowLibrary files(project.project(':modules:render-core').file('libs/caliko-1.3.8.jar'))
     additionalRuntimeClasspath 'de.javagl:jgltf-model:2.0.4'
     additionalRuntimeClasspath 'de.javagl:jgltf-impl-v2:2.0.4'
-    additionalRuntimeClasspath files(project(':modules:render-core').file('libs/caliko-1.3.8.jar'))
+    additionalRuntimeClasspath files(project.project(':modules:render-core').file('libs/caliko-1.3.8.jar'))
 
 
     implementation("cc.tweaked:cc-tweaked-$minecraft_version-forge:$cct_version")

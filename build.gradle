@@ -1,10 +1,11 @@
 plugins {
     id 'java-library'
     id 'idea'
-    id 'net.neoforged.moddev' version '2.0.107' apply false
+    id 'net.neoforged.moddev' apply false
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+boolean modernMinecraft = providers.gradleProperty('kasugaMinecraft').getOrElse('1.21.1') == '26.3'
+java.toolchain.languageVersion = JavaLanguageVersion.of(modernMinecraft ? 25 : 21)
 
 // Every subproject gets a UNIQUE jar name derived from its gradle project name. moddev derives the run
 // module-layer module name from the jar file name, so two jars sharing a name (e.g. several
@@ -12,6 +13,9 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 // `mod_id` is the shared neoforge MOD id (kasuga_lib) — it must NOT be used as the jar (archive) name.
 // Per-module `base { archivesName = ... }` overrides are therefore unnecessary and removed.
 subprojects {
+    if (modernMinecraft) {
+        layout.buildDirectory = layout.projectDirectory.dir('build/26.3')
+    }
     plugins.withId('base') {
         base {
             archivesName = "kasuga-${project.name}"
@@ -45,13 +49,21 @@ tasks.register('renderingReleaseCheck') {
             ':modules:shader:assemble',
             ':modules:shader-graal:check',
             ':modules:shader-graal:assemble',
-            ':modules:render-core:assemble',
-            ':modules:render-opengl:assemble',
-            ':modules:modelling:modelUnitTest',
-            ':modules:modelling:compileContentTestingJava',
-            ':modules:modelling:jar',
-            ':modules:modelling:sourcesJar',
-            ':modules:modelling:javadocJar',
-            ':modules:library:assemble'
+            ':modules:render-core:assemble'
     )
+    if (modernMinecraft) {
+        dependsOn ':modules:multiversion:check',
+                ':modules:multiversion:compileContentTestingJava',
+                ':modules:multiversion:assemble'
+    } else {
+        dependsOn(
+                ':modules:render-opengl:assemble',
+                ':modules:modelling:modelUnitTest',
+                ':modules:modelling:compileContentTestingJava',
+                ':modules:modelling:jar',
+                ':modules:modelling:sourcesJar',
+                ':modules:modelling:javadocJar',
+                ':modules:library:assemble'
+        )
+    }
 }

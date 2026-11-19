@@ -6,8 +6,9 @@ plugins {
 group = mod_group_id
 version = mod_version
 
+boolean modernMinecraft = providers.gradleProperty('kasugaMinecraft').getOrElse('1.21.1') == '26.3'
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    toolchain.languageVersion = JavaLanguageVersion.of(modernMinecraft ? 25 : 21)
     withSourcesJar()
     withJavadocJar()
 }
@@ -81,7 +82,7 @@ abstract class CheckGraphicsApiIsolation extends DefaultTask {
         if (!forbidden.empty) {
             throw new GradleException("Rendering core inherits host/API dependencies: ${forbidden}")
         }
-        def forbiddenImports = ~/import\s+(?:static\s+)?(?:org\.lwjgl\.|net\.minecraft\.|net\.neoforged\.|net\.fabricmc\.|com\.mojang\.blaze3d\.|lib\.kasuga\.mixins\.|lib\.kasuga\.rendering\.models\.mc\.(?!util\.Direction\s*;)|lib\.kasuga\.rendering\.models\.uml\.backend\.(?:gpu|cpu)\.|lib\.kasuga\.rendering\.output\.(?:gl|mc)\.)/
+        def forbiddenImports = ~/import\s+(?:static\s+)?(?:org\.lwjgl\.|net\.minecraft\.|net\.neoforged\.|net\.fabricmc\.|com\.mojang\.(?:blaze3d|renderpearl)\.|lib\.kasuga\.mixins\.|lib\.kasuga\.rendering\.models\.mc\.(?!util\.Direction\s*;)|lib\.kasuga\.rendering\.models\.uml\.backend\.(?:gpu|cpu)\.|lib\.kasuga\.rendering\.output\.(?:gl|mc)\.)/
         def violations = javaSources.files.findAll { it.text =~ forbiddenImports }
         if (!violations.empty) {
             throw new GradleException("Rendering core imports concrete host/API types: ${violations}")

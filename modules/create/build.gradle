@@ -231,7 +231,7 @@ dependencies {
     additionalRuntimeClasspath 'org.jgrapht:jgrapht-core:1.5.2'
     additionalRuntimeClasspath("de.javagl:jgltf-model:2.0.4")
     additionalRuntimeClasspath("de.javagl:jgltf-impl-v2:2.0.4")
-    additionalRuntimeClasspath files(project(':modules:render-core').file('libs/caliko-1.3.8.jar'))
+    additionalRuntimeClasspath files(project.project(':modules:render-core').file('libs/caliko-1.3.8.jar'))
 
     testImplementation project(":modules:core")
 
