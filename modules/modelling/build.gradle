@@ -58,6 +58,8 @@ tasks.register('modelUnitTest', Test) {
 }
 
 sourceSets {
+    main.resources.srcDir 'src/sharedResources'
+
     contentTesting {
         java {
             srcDir 'src/contentTesting/java'

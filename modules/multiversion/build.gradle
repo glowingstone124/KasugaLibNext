@@ -21,6 +21,7 @@ repositories {
 }
 
 sourceSets.main.java.srcDir(rootProject.file('modules/core/src/shared/java'))
+sourceSets.main.resources.srcDir(rootProject.file('modules/modelling/src/sharedResources'))
 sourceSets.test.java.srcDir(rootProject.file('modules/core/src/sharedTest/java'))
 
 tasks.named('test') { useJUnitPlatform() }

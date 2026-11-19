@@ -5,6 +5,9 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.host.ResourcePackSmoke;
+import lib.kasuga.rendering.effect.builtin.light.WorldLights;
+import lib.kasuga.rendering.lighting.LightColor;
+import lib.kasuga.rendering.lighting.LightSource;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfLoader;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfModelConverter;
@@ -46,6 +49,12 @@ public final class RenderPearlClientSmoke {
     private static int frames;
     private static ModelInstance model;
     private static RenderPearlWorldModels.Mount mount;
+    private static WorldLights.Mount light;
+    private static Lighting lighting = Lighting.BASELINE;
+    private static double baselineRed;
+    private static int modelPixels;
+
+    private enum Lighting { BASELINE, POINT, AREA, VOLUME, OCCLUDED, CLEARED }
 
     private RenderPearlClientSmoke() {}
 
@@ -91,6 +100,21 @@ public final class RenderPearlClientSmoke {
         Vector3fc forward = camera.forwardVector();
         Vec3 position = camera.position().add(forward.x() * 1.2, forward.y() * 1.2, forward.z() * 1.2);
         mount.setPlacement(position, new Matrix4f().rotate(camera.rotation()));
+        double distance = lighting == Lighting.OCCLUDED ? 1.9 : .7;
+        Vec3 emitter = camera.position().add(forward.x() * distance, forward.y() * distance, forward.z() * distance);
+        LightSource.Builder source = switch (lighting) {
+            case POINT -> LightSource.point(emitter.x, emitter.y, emitter.z).range(2).intensity(160);
+            case AREA -> LightSource.area(emitter.x, emitter.y, emitter.z, .7f, .7f)
+                    .range(2).intensity(180).twoSided(true);
+            case VOLUME, OCCLUDED -> LightSource.volumetric(emitter.x, emitter.y, emitter.z)
+                    .range(.35f).intensity(260).medium(4, 0);
+            default -> null;
+        };
+        if (source != null) {
+            LightSource frame = source.color(LightColor.srgb(1, 0, 0)).build();
+            if (light == null) light = WorldLights.mount(client.level, frame);
+            else light.update(frame);
+        }
     }
 
     @SubscribeEvent
@@ -98,9 +122,12 @@ public final class RenderPearlClientSmoke {
         if (mount == null || capturing || ++frames < 12) return;
         capturing = true;
         Minecraft client = Minecraft.getInstance();
+        Lighting captured = lighting;
         Screenshot.takeScreenshot(client.gameRenderer.mainRenderTarget(), image -> {
             try (image) {
-                Path path = client.gameDirectory.toPath().resolve("kasuga-renderpearl-smoke.png");
+                String name = captured == Lighting.BASELINE ? "kasuga-renderpearl-smoke.png"
+                        : "kasuga-renderpearl-light-" + captured.name().toLowerCase(Locale.ROOT) + ".png";
+                Path path = client.gameDirectory.toPath().resolve(name);
                 image.writeToFile(path);
                 int matching = 0;
                 for (int y = image.getHeight() / 3; y < image.getHeight() * 2 / 3; y++) {
@@ -112,18 +139,54 @@ public final class RenderPearlClientSmoke {
                         if (green > 90 && blue > 90 && red * 4 < green && red * 4 < blue) matching++;
                     }
                 }
-                if (matching < 100) throw new IllegalStateException("Model pixels missing from " + path);
-                LOGGER.info("KASUGA_RENDERPEARL_PASS backend={} modelPixels={} capture={}",
-                        RenderSystem.getDevice().getDeviceInfo().backendName(), matching, path);
+                double red = centerRed(image);
+                LOGGER.info("KASUGA_LIGHT_CAPTURE phase={} centerRed={} file={}", captured, red, path);
+                if (captured == Lighting.BASELINE) {
+                    if (matching < 100) throw new IllegalStateException("Model pixels missing from " + path);
+                    baselineRed = red;
+                    modelPixels = matching;
+                } else if (captured == Lighting.OCCLUDED || captured == Lighting.CLEARED) {
+                    if (Math.abs(red - baselineRed) > 8 || matching < 100) {
+                        throw new IllegalStateException(captured + " changed model colors at " + path);
+                    }
+                } else if (red < baselineRed + 15) {
+                    throw new IllegalStateException(captured + " did not illuminate the model at " + path);
+                }
             } catch (IOException failure) {
                 throw new IllegalStateException("Could not save RenderPearl smoke capture", failure);
             }
             client.execute(() -> {
-                mount.close();
-                model.close();
-                client.getTextureManager().release(WHITE);
-                client.stop();
+                if (captured == Lighting.CLEARED) {
+                    LOGGER.info("KASUGA_RENDERPEARL_PASS backend={} modelPixels={}",
+                            RenderSystem.getDevice().getDeviceInfo().backendName(), modelPixels);
+                    LOGGER.info("KASUGA_WORLD_LIGHTS_PASS point,area,volume,occluded,closed");
+                    mount.close();
+                    model.close();
+                    client.getTextureManager().release(WHITE);
+                    client.stop();
+                    return;
+                }
+                lighting = Lighting.values()[captured.ordinal() + 1];
+                if (lighting == Lighting.CLEARED) {
+                    light.close();
+                    light = null;
+                }
+                frames = 0;
+                capturing = false;
             });
         });
+    }
+
+    private static double centerRed(NativeImage image) {
+        int side = 24;
+        int left = image.getWidth() / 2 + image.getWidth() / 30;
+        int top = image.getHeight() / 2 - side / 2;
+        int red = 0;
+        for (int y = top; y < top + side; y++) {
+            for (int x = left; x < left + side; x++) {
+                red += image.getPixel(x, y) >>> 16 & 255;
+            }
+        }
+        return (double) red / (side * side);
     }
 }

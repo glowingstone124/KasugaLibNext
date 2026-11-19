@@ -79,9 +79,12 @@ Approved VFS resource layers load in their configured priority order under the
 host publishes the reloaded resource manager.
 
 Model rendering uses Minecraft entity pipelines on the active graphics backend
-and supports CPU skinning. The remaining Minecraft registry, UI
-and custom rendering APIs are being ported. Integration modules whose upstream
-mods still target earlier Minecraft releases stay in the 1.21.1 build.
+and supports CPU skinning. Point, area, and volumetric lights use RenderPearl
+with the same lighting shader calculations as 1.21.1. See the
+[world-space light guide](doc/guides/world-lights.md) for the 26.3 mount API.
+The remaining Minecraft registry, scene, UI, and custom rendering APIs are being ported.
+Integration modules whose upstream mods still target earlier Minecraft releases
+stay in the 1.21.1 build.
 
 The 26.3 development client can check both graphics backends using an isolated test
 world and framebuffer readback. The test selects and checks the requested backend:
@@ -91,8 +94,8 @@ world and framebuffer readback. The test selects and checks the requested backen
 ```
 
 Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing
-run logs `KASUGA_RENDERPEARL_PASS` and saves `kasuga-renderpearl-smoke.png` in
-the test game directory.
+run logs `KASUGA_RENDERPEARL_PASS` and `KASUGA_WORLD_LIGHTS_PASS`, then saves
+the model and lighting captures in the test game directory.
 
 Run the focused release gate with:
 

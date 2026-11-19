@@ -29,7 +29,9 @@ final class WorldLightRegression {
         int vertices = GL15.glGenBuffers();
         try (GlFixture fixture = new GlFixture();
              TBOBuffer lights = new TBOBuffer(() -> 8, LightBuffer.BYTES_PER_LIGHT * 4L, GL15.GL_DYNAMIC_DRAW)) {
-            int program = fixture.program(resource(ROOT + ".vsh"), resource(ROOT + ".fsh"));
+            String fragment = resource(ROOT + ".fsh").replace("#moj_import <kasuga_lib:lighting/world_lights.glsl>",
+                    resource("/assets/kasuga_lib/shaders/include/lighting/world_lights.glsl"));
+            int program = fixture.program(resource(ROOT + ".vsh"), fragment);
             GL20.glUseProgram(program);
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vertices);
             GL15.glBufferData(GL15.GL_ARRAY_BUFFER, new float[]{0, 0, 0, 2, 0, 0, 0, 2, 0}, GL15.GL_STATIC_DRAW);

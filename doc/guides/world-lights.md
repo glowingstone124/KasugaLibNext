@@ -1,8 +1,27 @@
 # 世界空间光源
 
-`WorldLights` 提供客户端动态点光源、矩形面光源和球形体积光。光源属于指定的
-`ClientLevel`，使用已有的 `EffectRenderPipeline` 完成可见性筛选、tick、移除和切换世界清理。
-默认不创建光源；没有可见光源时不会复制场景或执行光照 shader。
+`WorldLights` 提供客户端动态点光源、矩形面光源和球形体积光。光源属于客户端当前的
+`ClientLevel`。有可见光源时，渲染器复制场景颜色并执行光照 shader。
+
+## Minecraft 26.3
+
+在客户端线程调用 `WorldLights.mount(level, source)`。挂载支持 `LightSource.point`、
+`LightSource.area` 和 `LightSource.volumetric`。用 `update` 替换参数或位置，用 `close`
+移除光源。卸载世界时会清理该世界的光源。
+
+```java
+LightSource source = LightSource.point(10, 65, 10).temperature(2700).intensity(30).build();
+WorldLights.Mount lamp = WorldLights.mount(level, source);
+lamp.update(source.toBuilder().position(12, 65, 10).build());
+lamp.close();
+```
+
+带局部变换的调用方也可以传入 `LightFrame`。光照通过 RenderPearl 在 Vulkan 和 OpenGL
+上执行，使用世界颜色和深度纹理。
+
+## Minecraft 1.21.1
+
+1.21.1 使用 `EffectRenderPipeline` 管理可见性、tick、移除和切换世界清理。
 
 ```java
 EffectHandle<WorldLight> lamp = WorldLights.spawn(level,
