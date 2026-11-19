@@ -5,7 +5,7 @@ import lib.kasuga.rendering.lighting.LightFrame;
 import lib.kasuga.rendering.lighting.LightSource;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.state.level.CameraRenderState;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.context.ContextKey;
 import net.minecraft.world.phys.AABB;
@@ -56,19 +56,26 @@ public final class WorldLights {
 
     @SubscribeEvent
     public static void extract(ExtractLevelRenderStateEvent event) {
-        CameraRenderState camera = event.getRenderState().cameraRenderState;
-        List<LightFrame> visible = new ArrayList<>();
         for (Mount mount : MOUNTED) {
-            if (mount.level != event.getLevel()) continue;
-            LightFrame light = mount.frame;
-            if (light.source().intensity() == 0) continue;
-            Vector3d position = light.position();
-            double radius = light.source().boundsRadius() * light.rangeScale();
-            AABB bounds = new AABB(position.x - radius, position.y - radius, position.z - radius,
-                    position.x + radius, position.y + radius, position.z + radius);
-            if (camera.cullFrustum.isVisible(bounds)) visible.add(light);
+            if (mount.level == event.getLevel()) addToFrame(event, mount.frame);
         }
-        event.getRenderState().setRenderData(LIGHTS, List.copyOf(visible));
+    }
+
+    /** Adds an immutable light sample during level render state extraction. */
+    public static void addToFrame(ExtractLevelRenderStateEvent event, LightFrame light) {
+        if (light.source().intensity() == 0) return;
+        Vector3d position = light.position();
+        double radius = light.source().boundsRadius() * light.rangeScale();
+        AABB bounds = new AABB(position.x - radius, position.y - radius, position.z - radius,
+                position.x + radius, position.y + radius, position.z + radius);
+        if (!event.getFrustum().isVisible(bounds)) return;
+        LevelRenderState state = event.getRenderState();
+        List<LightFrame> visible = state.getRenderData(LIGHTS);
+        if (visible == null) {
+            visible = new ArrayList<>();
+            state.setRenderData(LIGHTS, visible);
+        }
+        visible.add(light);
     }
 
     @SubscribeEvent

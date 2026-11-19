@@ -27,6 +27,10 @@ public record ScenePose(Vec3 origin, Matrix4f transform) {
 
     @Override public Matrix4f transform() { return new Matrix4f(transform); }
 
+    public Matrix4d worldTransform() {
+        return new Matrix4d().translation(origin.x, origin.y, origin.z).mul(new Matrix4d(transform));
+    }
+
     public Matrix4f relativeTo(Vec3 camera) {
         return new Matrix4f().translation((float) (origin.x - camera.x), (float) (origin.y - camera.y),
                 (float) (origin.z - camera.z)).mul(transform);

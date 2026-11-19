@@ -223,8 +223,7 @@ public final class SceneModels implements AutoCloseable {
                     handle = WorldLights.spawn(owner.level, light.source());
                     mountedLights.put(light.target(), handle);
                 }
-                Matrix4d transform = new Matrix4d().translation(pose.origin().x, pose.origin().y, pose.origin().z)
-                        .mul(new Matrix4d(pose.transform())).mul(new Matrix4d(light.transform()));
+                Matrix4d transform = pose.worldTransform().mul(new Matrix4d(light.transform()));
                 handle.effect().frame(new LightFrame(light.source(), transform));
             }
             for (WorldLightTarget target : List.copyOf(mountedLights.keySet())) {

@@ -21,6 +21,7 @@ repositories {
 }
 
 sourceSets.main.java.srcDir(rootProject.file('modules/core/src/shared/java'))
+sourceSets.main.java.srcDir(rootProject.file('modules/modelling/src/shared/java'))
 sourceSets.main.resources.srcDir(rootProject.file('modules/modelling/src/sharedResources'))
 sourceSets.test.java.srcDir(rootProject.file('modules/core/src/sharedTest/java'))
 
@@ -30,6 +31,13 @@ sourceSets {
     contentTesting {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+
+tasks.named('processContentTestingResources', ProcessResources) {
+    from(rootProject.file('modules/modelling/src/contentTesting/resources')) {
+        include 'assets/kasuga_lib/models/components/light_locator.bbmodel',
+                'assets/kasuga_lib/models/components/emitter_smoke.bbmodel'
     }
 }
 

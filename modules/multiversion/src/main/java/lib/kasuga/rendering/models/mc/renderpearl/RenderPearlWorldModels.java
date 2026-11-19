@@ -2,11 +2,17 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import lib.kasuga.KasugaLib;
+import lib.kasuga.rendering.effect.builtin.light.WorldLights;
+import lib.kasuga.rendering.lighting.LightFrame;
+import lib.kasuga.rendering.models.mc.component.ModelComponents;
+import lib.kasuga.rendering.models.mc.component.ModelComponentsHolder;
+import lib.kasuga.rendering.models.mc.component.ModelLightPlacement;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
 import lib.kasuga.rendering.models.uml.util.MeshMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
@@ -18,6 +24,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
 import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import org.joml.Matrix4d;
+import org.joml.Matrix4dc;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 
@@ -64,23 +72,47 @@ public final class RenderPearlWorldModels {
     @SubscribeEvent
     public static void extract(ExtractLevelRenderStateEvent event) {
         Map<ModelInstance, Mount> models = LEVELS.get(event.getLevel());
-        if (models == null || models.isEmpty()) {
-            event.getRenderState().setRenderData(DRAW_DATA, List.of());
-            return;
-        }
-        float partialTick = event.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        if (models == null) return;
         Vec3 camera = event.getCamera().position();
-        List<Draw> draws = new ArrayList<>(models.size());
         for (Mount mount : List.copyOf(models.values())) {
             ModelInstance model = mount.model;
             if (mount.closed || model.isClosed()) continue;
-            model.sample(partialTick, event);
-            model.prepareRenderFrame(event);
-            int light = LightCoordsUtil.getLightCoords(event.getLevel(), BlockPos.containing(mount.position));
-            List<RenderPearlModelGeometry.Batch> batches = RenderPearlModelGeometry.extract(model, mount.textures, light);
-            draws.add(new Draw(mount.position.subtract(camera), new Matrix4f(mount.transform), batches));
+            Vec3 offset = mount.position.subtract(camera);
+            Matrix4f cameraRelative = new Matrix4f().translation((float) offset.x, (float) offset.y, (float) offset.z)
+                    .mul(mount.transform);
+            Vec3 position = mount.position;
+            Matrix4d world = new Matrix4d().translation(position.x, position.y, position.z)
+                    .mul(new Matrix4d(mount.transform));
+            int light = LightCoordsUtil.getLightCoords(event.getLevel(), BlockPos.containing(position));
+            addToFrame(event, model, mount.textures, cameraRelative, world, light);
         }
-        event.getRenderState().setRenderData(DRAW_DATA, List.copyOf(draws));
+    }
+
+    /** Captures model geometry and its authored bone lights from the same evaluated pose. */
+    public static void addToFrame(ExtractLevelRenderStateEvent event, ModelInstance model,
+                                  Function<Texture, Identifier> textures, Matrix4fc cameraRelative,
+                                  Matrix4dc worldPlacement, int packedLight) {
+        if (model.isClosed()) return;
+        float partialTick = event.getDeltaTracker().getGameTimeDeltaPartialTick(false);
+        model.sample(partialTick, event);
+        model.prepareRenderFrame(event);
+        List<RenderPearlModelGeometry.Batch> batches = RenderPearlModelGeometry.extract(model, textures, packedLight);
+        if (!batches.isEmpty()) {
+            LevelRenderState state = event.getRenderState();
+            List<Draw> draws = state.getRenderData(DRAW_DATA);
+            if (draws == null) {
+                draws = new ArrayList<>();
+                state.setRenderData(DRAW_DATA, draws);
+            }
+            draws.add(new Draw(new Matrix4f(cameraRelative), batches));
+        }
+        if (model.getModel().getModelData() instanceof ModelComponentsHolder components) {
+            for (ModelComponents.LightDefinition light : components.components().lights()) {
+                if (!light.enabled()) continue;
+                LightFrame frame = ModelLightPlacement.sample(model.getSkeletonInstance(), light, worldPlacement);
+                if (frame != null) WorldLights.addToFrame(event, frame);
+            }
+        }
     }
 
     @SubscribeEvent
@@ -91,7 +123,6 @@ public final class RenderPearlWorldModels {
         for (Draw draw : draws) {
             poseStack.pushPose();
             try {
-                poseStack.translate(draw.cameraRelativePosition());
                 poseStack.mulPose(draw.transform());
                 for (RenderPearlModelGeometry.Batch batch : draw.batches()) {
                     event.getSubmitNodeCollector().submitCustomGeometry(poseStack, batch.layer(), batch::submit);
@@ -151,6 +182,5 @@ public final class RenderPearlWorldModels {
         }
     }
 
-    private record Draw(Vec3 cameraRelativePosition, Matrix4f transform,
-                        List<RenderPearlModelGeometry.Batch> batches) {}
+    private record Draw(Matrix4f transform, List<RenderPearlModelGeometry.Batch> batches) {}
 }

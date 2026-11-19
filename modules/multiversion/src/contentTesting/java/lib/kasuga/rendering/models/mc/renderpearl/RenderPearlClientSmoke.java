@@ -15,7 +15,9 @@ import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.LevelSettings;
@@ -36,6 +38,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
 import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
 public final class RenderPearlClientSmoke {
@@ -45,16 +49,29 @@ public final class RenderPearlClientSmoke {
     private static final Identifier WHITE = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "smoke/white");
     private static final long START = System.nanoTime();
     private static boolean createdWorld;
+    private static boolean cameraRequested;
     private static boolean capturing;
     private static int frames;
     private static ModelInstance model;
     private static RenderPearlWorldModels.Mount mount;
     private static WorldLights.Mount light;
+    private static SceneLightingSmoke scenes;
     private static Lighting lighting = Lighting.BASELINE;
     private static double baselineRed;
     private static int modelPixels;
 
-    private enum Lighting { BASELINE, POINT, AREA, VOLUME, OCCLUDED, CLEARED }
+    enum Lighting {
+        BASELINE(false), POINT(true), AREA(true), VOLUME(true), OCCLUDED(false), CLEARED(false),
+        SCENE_LIT(true), SCENE_MOVED(false), SCENE_HIDDEN(false), SCENE_SHOWN(true), SCENE_CLOSED(false),
+        LOCATOR_LIT(true), LOCATOR_BONE_MOVED(false), LOCATOR_RESTORED(true), LOCATOR_CLOSED(false),
+        EMBEDDED_TEXTURE(false);
+
+        final boolean lit;
+
+        Lighting(boolean lit) {
+            this.lit = lit;
+        }
+    }
 
     private RenderPearlClientSmoke() {}
 
@@ -86,6 +103,12 @@ public final class RenderPearlClientSmoke {
         if (EXPECTED_BACKEND.isEmpty() || capturing) return;
         Minecraft client = Minecraft.getInstance();
         if (client.level == null || client.player == null || client.gui.screen() != null || client.gui.overlay() != null) return;
+        if (!cameraRequested) {
+            positionCamera(client);
+            return;
+        }
+        Camera camera = client.gameRenderer.mainCamera();
+        if (camera.position().y < 240 || !client.player.getAbilities().flying) return;
         if (mount == null) {
             try (InputStream input = client.getResourceManager().open(SOURCE)) {
                 model = new ModelInstance(GltfModelConverter.convert(GltfLoader.load(input)),
@@ -96,12 +119,20 @@ public final class RenderPearlClientSmoke {
             client.getTextureManager().register(WHITE, new DynamicTexture(WHITE::toString, white));
             mount = RenderPearlWorldModels.mount(client.level, model, Vec3.ZERO, texture -> WHITE);
         }
-        Camera camera = client.gameRenderer.mainCamera();
         Vector3fc forward = camera.forwardVector();
         Vec3 position = camera.position().add(forward.x() * 1.2, forward.y() * 1.2, forward.z() * 1.2);
-        mount.setPlacement(position, new Matrix4f().rotate(camera.rotation()));
         double distance = lighting == Lighting.OCCLUDED ? 1.9 : .7;
         Vec3 emitter = camera.position().add(forward.x() * distance, forward.y() * distance, forward.z() * distance);
+        Matrix4f orientation = new Matrix4f().rotate(camera.rotation());
+        if (lighting.ordinal() >= Lighting.SCENE_LIT.ordinal()) {
+            if (scenes == null) {
+                mount.close();
+                scenes = new SceneLightingSmoke(client.level, model, WHITE);
+            }
+            scenes.update(lighting, position, orientation, emitter);
+            return;
+        }
+        mount.setPlacement(position, orientation);
         LightSource.Builder source = switch (lighting) {
             case POINT -> LightSource.point(emitter.x, emitter.y, emitter.z).range(2).intensity(160);
             case AREA -> LightSource.area(emitter.x, emitter.y, emitter.z, .7f, .7f)
@@ -115,6 +146,22 @@ public final class RenderPearlClientSmoke {
             if (light == null) light = WorldLights.mount(client.level, frame);
             else light.update(frame);
         }
+    }
+
+    private static void positionCamera(Minecraft client) {
+        IntegratedServer server = client.getSingleplayerServer();
+        if (server == null) throw new IllegalStateException("Smoke test requires an integrated server");
+        UUID id = client.player.getUUID();
+        server.execute(() -> {
+            ServerPlayer observer = server.getPlayerList().getPlayer(id);
+            if (observer == null) throw new IllegalStateException("Smoke observer is missing from the integrated server");
+            observer.getAbilities().flying = true;
+            observer.onUpdateAbilities();
+            if (!observer.teleportTo(server.overworld(), .5, 240, .5, Set.of(), 0, 0, true)) {
+                throw new IllegalStateException("Could not move the smoke observer above the terrain");
+            }
+        });
+        cameraRequested = true;
     }
 
     @SubscribeEvent
@@ -145,7 +192,11 @@ public final class RenderPearlClientSmoke {
                     if (matching < 100) throw new IllegalStateException("Model pixels missing from " + path);
                     baselineRed = red;
                     modelPixels = matching;
-                } else if (captured == Lighting.OCCLUDED || captured == Lighting.CLEARED) {
+                } else if (captured == Lighting.EMBEDDED_TEXTURE) {
+                    if (!blueTextureAtCenter(image)) {
+                        throw new IllegalStateException("Embedded Blockbench texture pixels missing from " + path);
+                    }
+                } else if (!captured.lit) {
                     if (Math.abs(red - baselineRed) > 8 || matching < 100) {
                         throw new IllegalStateException(captured + " changed model colors at " + path);
                     }
@@ -156,11 +207,14 @@ public final class RenderPearlClientSmoke {
                 throw new IllegalStateException("Could not save RenderPearl smoke capture", failure);
             }
             client.execute(() -> {
-                if (captured == Lighting.CLEARED) {
+                if (captured == Lighting.EMBEDDED_TEXTURE) {
                     LOGGER.info("KASUGA_RENDERPEARL_PASS backend={} modelPixels={}",
                             RenderSystem.getDevice().getDeviceInfo().backendName(), modelPixels);
                     LOGGER.info("KASUGA_WORLD_LIGHTS_PASS point,area,volume,occluded,closed");
-                    mount.close();
+                    LOGGER.info("KASUGA_SCENE_LIGHTS_PASS nested,independent-move,hidden,restored,closed");
+                    LOGGER.info("KASUGA_BLOCKBENCH_LIGHT_PASS native-locator,bone-move,restored,closed");
+                    LOGGER.info("KASUGA_BLOCKBENCH_TEXTURE_PASS embedded-png");
+                    scenes.close();
                     model.close();
                     client.getTextureManager().release(WHITE);
                     client.stop();
@@ -188,5 +242,21 @@ public final class RenderPearlClientSmoke {
             }
         }
         return (double) red / (side * side);
+    }
+
+    private static boolean blueTextureAtCenter(NativeImage image) {
+        int centerX = image.getWidth() / 2;
+        int centerY = image.getHeight() / 2;
+        int bluePixels = 0;
+        for (int y = centerY - 60; y < centerY + 60; y++) {
+            for (int x = centerX - 48; x < centerX + 48; x++) {
+                int pixel = image.getPixel(x, y);
+                int red = pixel >>> 16 & 255;
+                int green = pixel >>> 8 & 255;
+                int blue = pixel & 255;
+                if (red > 20 && green > red + 10 && blue > green + 5) bluePixels++;
+            }
+        }
+        return bluePixels > 300;
     }
 }

@@ -66,7 +66,7 @@ public final class ModelComponents {
             String space = string(emitter, "space", "world");
             if (!space.equals("local") && !space.equals("world")) throw error("emitters." + id + ".space");
             String texture = string(particle, "texture", "");
-            if (!texture.isBlank() && net.minecraft.resources.ResourceLocation.tryParse(texture) == null)
+            if (!texture.isBlank() && !ModelComponentTextures.isValid(texture))
                 throw error("emitters." + id + ".particle.texture");
             emitters.add(new EmitterDefinition(
                     id, string(emitter, "name", id), bone, position, rotation,

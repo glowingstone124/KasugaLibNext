@@ -38,6 +38,25 @@ public interface MinecraftModelSource extends AutoCloseable {
 
     @Override default void close() {}
 
+    /** A view of another source whose lifecycle belongs to its existing owner. */
+    static MinecraftModelSource borrowed(MinecraftModelSource source) {
+        Objects.requireNonNull(source, "source");
+        return new MinecraftModelSource() {
+            @Override public Snapshot snapshot(LayerLayout layout, float partialTick) {
+                return source.snapshot(layout, partialTick);
+            }
+
+            @Override public List<Integer> layerCoordinates(LayerLayout.Axis axis) {
+                return source.layerCoordinates(axis);
+            }
+
+            @Override public java.util.Map<Integer, java.util.Map<net.minecraft.resources.ResourceLocation, Integer>>
+                    blockStatistics(LayerLayout.Axis axis) {
+                return source.blockStatistics(axis);
+            }
+        };
+    }
+
     @FunctionalInterface
     interface Renderer {
         void render(Context context);

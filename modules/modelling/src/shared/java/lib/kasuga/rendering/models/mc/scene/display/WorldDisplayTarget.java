@@ -134,11 +134,7 @@ public abstract class WorldDisplayTarget implements MinecraftModelSource {
     }
     /** Borrowed model view: a viewer may close its canvas without destroying a mounted target. */
     public final MinecraftModelSource borrowedSource() {
-        return new MinecraftModelSource() {
-            @Override public Snapshot snapshot(LayerLayout layout,float partial) { return WorldDisplayTarget.this.snapshot(layout,partial); }
-            @Override public List<Integer> layerCoordinates(LayerLayout.Axis axis) { return WorldDisplayTarget.this.layerCoordinates(axis); }
-            @Override public Map<Integer,Map<net.minecraft.resources.ResourceLocation,Integer>> blockStatistics(LayerLayout.Axis axis) { return WorldDisplayTarget.this.blockStatistics(axis); }
-        };
+        return MinecraftModelSource.borrowed(this);
     }
     public static Snapshot placed(Snapshot frame, Matrix4fc matrix, String prefix) {
         var placement=new Matrix4f(matrix);

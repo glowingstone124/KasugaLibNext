@@ -5,17 +5,16 @@ import lib.kasuga.rendering.effect.builtin.light.WorldLight;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
 import lib.kasuga.rendering.lighting.LightFrame;
 import lib.kasuga.rendering.models.mc.component.ModelComponents;
+import lib.kasuga.rendering.models.mc.component.ModelLightPlacement;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.dynamic.SkeletonInstance;
 import lib.kasuga.rendering.models.uml.dynamic.tick_loop.ModelTickLoop;
 import lib.kasuga.rendering.models.uml.dynamic.tick_loop.PendingTransform;
 import lib.kasuga.rendering.models.uml.dynamic.tick_loop.handler.ModelTickLoopModule;
-import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.structure.Model;
 import lib.kasuga.rendering.output.mc.MinecraftWorldViews;
 import net.minecraft.client.multiplayer.ClientLevel;
 import org.joml.Matrix4d;
-import org.joml.Vector3d;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,11 +52,7 @@ public final class ModelLightRuntime {
 
     /** Read-only frame sampling also used by authoring/parity tests; no GPU allocation. */
     public static LightFrame frame(SkeletonInstance skeleton, ModelComponents.LightDefinition definition) {
-        Vector3d origin = skeleton.getWorldOrigin();
-        Transform local = skeleton.anchorTransformRelative(definition.anchorName(), origin);
-        if (local == null || !local.transform().isFinite()) return null;
-        return new LightFrame(definition.source(), new Matrix4d().translation(origin)
-                .mul(new Matrix4d(local.transform())));
+        return ModelLightPlacement.sample(skeleton, definition, new Matrix4d());
     }
 
     public static final class LightModule implements ModelTickLoopModule {

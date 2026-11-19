@@ -19,6 +19,22 @@ lamp.close();
 带局部变换的调用方也可以传入 `LightFrame`。光照通过 RenderPearl 在 Vulkan 和 OpenGL
 上执行，使用世界颜色和深度纹理。
 
+把光源加入 `WorldDisplayScene` 后，可以用 `SceneModels` 挂载整个场景。现有的
+`WorldLightTarget` 支持移动单灯，场景的变换、可见性和关闭操作会传给其中的光源。
+
+用 `lib.kasuga.rendering.models.mc.typo.bbmodel.KsgBbModelLoader` 打开带 Kasuga
+光源 Locator 的原生 `.bbmodel`，再把返回的节点加入场景。
+
+```java
+WorldDisplayScene scene = new WorldDisplayScene();
+scene.add(KsgBbModelLoader.open(Identifier.parse("example:models/lamp.bbmodel")));
+SceneModels models = SceneModels.open(level);
+models.add(scene, new Vec3(10, 64, 10));
+```
+
+光源沿用导出文件里的类型、颜色、色温和强度，从游戏模型的当前骨骼姿态采样位置与朝向。
+关闭 `models` 会释放场景、模型实例和内嵌纹理。
+
 ## Minecraft 1.21.1
 
 1.21.1 使用 `EffectRenderPipeline` 管理可见性、tick、移除和切换世界清理。
@@ -57,7 +73,7 @@ EffectHandle<WorldLight> mist = WorldLights.spawn(level,
 
 ### 放进 scene 并移动
 
-`WorldLightTarget` 是 `WorldDisplayTarget`，可以和模型、UI 一起加入嵌套的 `WorldDisplayScene`。
+`WorldLightTarget` 是 `WorldDisplayTarget`，可以和模型一起加入嵌套的 `WorldDisplayScene`。
 使用已有 `SceneModels` 挂载到世界；节点的位置、矩形方向和尺寸都会继承 scene 与挂载点的变换。
 
 ```java
@@ -81,7 +97,7 @@ models.close();                           // 关闭挂载、scene 和全部子�
 这些 API 均在客户端渲染线程调用。`WorldDisplayScene` 和 `WorldLightTarget` 位于
 `lib.kasuga.rendering.models.mc.scene.display`；`SceneModels` 位于 `lib.kasuga.scene`。
 `mount.follow(host)` 可复用 `SceneHost` 跟随移动物体，每个相机只采样当前 pose，不推进场景时间。
-场景关闭、节点移除或宿主消失时，由挂载的生命周期清理光源。隐藏会移除渲染实例，再次显示时重新挂载。
+场景关闭、节点移除或宿主消失时，由挂载的生命周期清理光源。隐藏的子树暂停提交光源，再次显示时恢复。
 
 面光源保留完整旋转（包括 roll）和面板尺寸缩放。非均匀缩放或剪切下，作用范围和球形介质使用包围球近似，
 而矩形发光面仍采用完整仿射变换。独立的 `WorldLights.spawn` 光源也提供 `moveTo(x,y,z)` / `moveBy(x,y,z)`。
