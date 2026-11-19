@@ -94,12 +94,15 @@ lights and the same evaluated bone pose as their geometry. See the
 [world-space light guide](doc/guides/world-lights.md).
 
 The `fsm_block` and `fsm_be` data-driven factories can bind `.bbmodel`, `.gltf`,
-and `.glb` models to a block entity. The server runs the state machine and
+`.glb`, and `.obj` models to a block entity. The server runs the state machine and
 synchronizes transitions to the clients, which sample the bone pose through
 RenderPearl. Standalone glTF models can also be opened with `KsgGltfLoader.open`.
 Relative glTF buffer and texture references resolve from the model's resource
 pack namespace. While an integrated server is running, its data pack stack
 provides the shared FSM definitions and clips to both sides.
+Open a standalone OBJ scene node with `KsgObjLoader.open`. It resolves sibling
+MTL files and diffuse textures from resource packs, including texture cutouts
+and MTL dissolve.
 
 Kasuga document and device registration, native model previews, world UI, and
 other custom rendering APIs are being ported.
@@ -116,7 +119,7 @@ world and framebuffer readback. The test selects and checks the requested backen
 Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_RENDERPEARL_PASS`, `KASUGA_WORLD_LIGHTS_PASS`,
 `KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`,
-`KASUGA_REGISTRATION_PASS`, and `KASUGA_FSM_PASS`, then saves the
+`KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, and `KASUGA_OBJ_PASS`, then saves the
 model, animation, and lighting captures in the test game directory.
 
 Run the focused release gate with:

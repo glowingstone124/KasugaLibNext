@@ -66,7 +66,7 @@ public final class RenderPearlClientSmoke {
         BASELINE(false), POINT(true), AREA(true), VOLUME(true), OCCLUDED(false), CLEARED(false),
         SCENE_LIT(true), SCENE_MOVED(false), SCENE_HIDDEN(false), SCENE_SHOWN(true), SCENE_CLOSED(false),
         LOCATOR_LIT(true), LOCATOR_BONE_MOVED(false), LOCATOR_RESTORED(true), LOCATOR_CLOSED(false),
-        EMBEDDED_TEXTURE(false);
+        EMBEDDED_TEXTURE(false), OBJ_MATERIAL(false);
 
         final boolean lit;
 
@@ -202,6 +202,10 @@ public final class RenderPearlClientSmoke {
                     if (!blueTextureAtCenter(image)) {
                         throw new IllegalStateException("Embedded Blockbench texture pixels missing from " + path);
                     }
+                } else if (captured == Lighting.OBJ_MATERIAL) {
+                    if (!objCutoutAtCenter(image)) {
+                        throw new IllegalStateException("OBJ diffuse texture or its cutout is missing from " + path);
+                    }
                 } else if (!captured.lit) {
                     if (Math.abs(red - baselineRed) > 8 || matching < 100) {
                         throw new IllegalStateException(captured + " changed model colors at " + path);
@@ -213,13 +217,14 @@ public final class RenderPearlClientSmoke {
                 throw new IllegalStateException("Could not save RenderPearl smoke capture", failure);
             }
             client.execute(() -> {
-                if (captured == Lighting.EMBEDDED_TEXTURE) {
+                if (captured == Lighting.OBJ_MATERIAL) {
                     LOGGER.info("KASUGA_RENDERPEARL_PASS backend={} modelPixels={}",
                             RenderSystem.getDevice().getDeviceInfo().backendName(), modelPixels);
                     LOGGER.info("KASUGA_WORLD_LIGHTS_PASS point,area,volume,occluded,closed");
                     LOGGER.info("KASUGA_SCENE_LIGHTS_PASS nested,independent-move,hidden,restored,closed");
                     LOGGER.info("KASUGA_BLOCKBENCH_LIGHT_PASS native-locator,bone-move,restored,closed");
                     LOGGER.info("KASUGA_BLOCKBENCH_TEXTURE_PASS embedded-png");
+                    LOGGER.info("KASUGA_OBJ_PASS resource-pack,sibling-mtl,namespaced-diffuse,cutout");
                     scenes.close();
                     model.close();
                     client.getTextureManager().release(WHITE);
@@ -235,6 +240,32 @@ public final class RenderPearlClientSmoke {
                 capturing = false;
             });
         });
+    }
+
+    private static boolean objCutoutAtCenter(NativeImage image) {
+        int centerX = image.getWidth() / 2;
+        int centerY = image.getHeight() / 2;
+        int coloredLeft = 0;
+        int coloredRight = 0;
+        int clearLeft = 0;
+        int clearRight = 0;
+        for (int y = centerY - 24; y < centerY + 24; y++) {
+            for (int x = centerX - 64; x < centerX + 64; x++) {
+                int pixel = image.getPixel(x, y);
+                int red = pixel >>> 16 & 255;
+                int green = pixel >>> 8 & 255;
+                int blue = pixel & 255;
+                if (red > 100 && blue > 55 && green * 2 < red) {
+                    if (x < centerX) coloredLeft++;
+                    else coloredRight++;
+                }
+                if (green > 90 && blue > 90 && red * 4 < green && red * 4 < blue) {
+                    if (x < centerX) clearLeft++;
+                    else clearRight++;
+                }
+            }
+        }
+        return (coloredLeft > 200 && clearRight > 200) || (coloredRight > 200 && clearLeft > 200);
     }
 
     private static double centerRed(NativeImage image) {

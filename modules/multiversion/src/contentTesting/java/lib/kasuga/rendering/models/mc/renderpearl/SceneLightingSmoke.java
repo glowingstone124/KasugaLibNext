@@ -5,6 +5,7 @@ import lib.kasuga.rendering.lighting.LightColor;
 import lib.kasuga.rendering.lighting.LightSource;
 import lib.kasuga.rendering.models.mc.scene.display.WorldDisplayScene;
 import lib.kasuga.rendering.models.mc.scene.display.WorldLightTarget;
+import lib.kasuga.rendering.models.mc.typo.KsgObjLoader;
 import lib.kasuga.rendering.models.mc.typo.bbmodel.KsgBbModelLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.math.Transform;
@@ -23,6 +24,7 @@ final class SceneLightingSmoke implements AutoCloseable {
             "models/components/light_locator.bbmodel");
     private static final Identifier TEXTURED_MODEL = Identifier.fromNamespaceAndPath(KasugaLib.MODID,
             "models/components/emitter_smoke.bbmodel");
+    private static final Identifier OBJ_MODEL = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "models/smoke/obj_probe.obj");
     private static final String LOCATOR_BONE = "lamp_mount";
     private static final Vec3 LOCAL_LIGHT = new Vec3(6, -18, 0);
     private final SceneModels models;
@@ -77,6 +79,10 @@ final class SceneLightingSmoke implements AutoCloseable {
                     }
                 }
                 case EMBEDDED_TEXTURE -> texturedEntry = models.add(KsgBbModelLoader.open(TEXTURED_MODEL), Vec3.ZERO);
+                case OBJ_MATERIAL -> {
+                    texturedEntry.close();
+                    texturedEntry = models.add(KsgObjLoader.open(OBJ_MODEL), Vec3.ZERO);
+                }
                 default -> {}
             }
             previous = phase;
@@ -87,6 +93,10 @@ final class SceneLightingSmoke implements AutoCloseable {
             locatorEntry.position(emitter.subtract(2, 1.5, 0));
         }
         if (texturedEntry != null) {
+            if (phase == RenderPearlClientSmoke.Lighting.OBJ_MATERIAL) {
+                texturedEntry.position(emitter).transform(new Matrix4f(orientation).scale(.6f));
+                return;
+            }
             Vector3f shift = orientation.transformDirection(new Vector3f(0, -.4f, 0));
             texturedEntry.position(emitter.add(shift.x, shift.y, shift.z))
                     .transform(new Matrix4f(orientation).scale(2));

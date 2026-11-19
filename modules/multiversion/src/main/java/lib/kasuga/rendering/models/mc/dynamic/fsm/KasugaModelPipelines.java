@@ -5,6 +5,7 @@ import lib.kasuga.KasugaLib;
 import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
 import lib.kasuga.rendering.models.mc.renderpearl.RenderPearlModelSource;
 import lib.kasuga.rendering.models.mc.renderpearl.RenderPearlWorldModels;
+import lib.kasuga.rendering.models.mc.typo.KsgObjLoader;
 import lib.kasuga.rendering.models.mc.typo.bbmodel.KsgBbModelLoader;
 import lib.kasuga.rendering.models.mc.typo.gltf.KsgGltfLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
@@ -73,6 +74,7 @@ public final class KasugaModelPipelines {
             String path = identifier.getPath();
             if (path.endsWith(".bbmodel")) return KsgBbModelLoader.open(identifier);
             if (path.endsWith(".gltf") || path.endsWith(".glb")) return KsgGltfLoader.open(identifier);
+            if (path.endsWith(".obj")) return KsgObjLoader.open(identifier);
             throw new IOException("Unsupported RenderPearl model format: " + identifier);
         }
 
