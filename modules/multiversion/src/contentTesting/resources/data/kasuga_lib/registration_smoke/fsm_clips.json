@@ -1,0 +1,17 @@
+{
+  "animation_clips": [
+    {
+      "id": "kasuga_lib:fsm_smoke_move",
+      "duration_seconds": 0.4,
+      "bones": [
+        {
+          "bone": "panel",
+          "keyframes": [
+            {"time": 0.0, "transform": {"translate": [0, 0, 0]}},
+            {"time": 0.4, "transform": {"translate": [1.0, 0, 0]}}
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -144,6 +144,7 @@ public final class RegistrationSmoke {
             throw new IllegalStateException("Data-driven state defaults were not applied");
         }
         ServerLevel world = event.getServer().overworld();
+        FsmClientSmoke.initializeWorld(world);
         if (!state.getCollisionShape(world, PLACEMENT).isEmpty()) {
             throw new IllegalStateException("Data-driven no_collision was not applied");
         }

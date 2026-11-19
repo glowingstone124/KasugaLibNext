@@ -1,0 +1,23 @@
+{
+  "state_machines": [
+    {
+      "id": "kasuga_lib:fsm_smoke",
+      "state_vars": [
+        {"name": "advance", "type": "bool", "default": false, "ephemeral": true}
+      ],
+      "layers": [
+        {
+          "id": "panel",
+          "initial_state": "rest",
+          "states": [
+            {"id": "rest"},
+            {"id": "moved", "clip": {"id": "kasuga_lib:fsm_smoke_move"}}
+          ],
+          "transitions": [
+            {"id": "advance", "from": "rest", "to": "moved", "trigger_on": "advance"}
+          ]
+        }
+      ]
+    }
+  ]
+}

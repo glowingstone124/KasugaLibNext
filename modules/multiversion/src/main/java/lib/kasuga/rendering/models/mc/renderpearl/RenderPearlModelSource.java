@@ -1,24 +1,39 @@
 package lib.kasuga.rendering.models.mc.renderpearl;
 
+import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
+import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.models.mc.scene.LayerLayout;
 import lib.kasuga.rendering.models.mc.scene.ModelBounds;
 import lib.kasuga.rendering.models.mc.scene.display.WorldDisplayTarget;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
+import lib.kasuga.rendering.models.uml.structure.Model;
 import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
 import lib.kasuga.rendering.models.uml.util.MeshMode;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4d;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 
 /** A portable model and its authored lights as one world display node. */
 public final class RenderPearlModelSource extends WorldDisplayTarget {
+    private static final AtomicLong TEXTURE_IDS = new AtomicLong();
     private final ModelInstance model;
     private final Function<Texture, Identifier> textures;
     private final Runnable release;
@@ -48,7 +63,68 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
         return new RenderPearlModelSource(model, textures, release, true);
     }
 
+    /** Creates a model instance and uploads any embedded textures it owns. */
+    public static RenderPearlModelSource open(Model model, Function<Texture, Identifier> externalTexture,
+                                             Function<Texture, BufferedImage> embeddedTexture) {
+        RenderSystem.assertOnRenderThread();
+        TextureManager manager = Minecraft.getInstance().getTextureManager();
+        List<Identifier> ownedTextures = new ArrayList<>();
+        Map<Texture, Identifier> bindings = new IdentityHashMap<>();
+        ModelInstance instance = new ModelInstance(model, null, null, null, null, null);
+        try {
+            for (Texture texture : model.getMaterialSet().getTextures()) {
+                BufferedImage image = embeddedTexture.apply(texture);
+                if (image != null) {
+                    Identifier id = registerEmbedded(manager, image);
+                    ownedTextures.add(id);
+                    bindings.put(texture, id);
+                } else {
+                    bindings.put(texture, externalTexture.apply(texture));
+                }
+            }
+            return own(instance, bindings::get, () -> release(manager, ownedTextures));
+        } catch (RuntimeException | Error failure) {
+            try {
+                instance.close();
+            } catch (RuntimeException | Error cleanup) {
+                failure.addSuppressed(cleanup);
+            } finally {
+                release(manager, ownedTextures);
+            }
+            throw failure;
+        }
+    }
+
+    private static Identifier registerEmbedded(TextureManager manager, BufferedImage image) {
+        Identifier id = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "model/embedded/" + TEXTURE_IDS.incrementAndGet());
+        DynamicTexture texture = new DynamicTexture(id::toString, image.getWidth(), image.getHeight(), false);
+        try {
+            NativeImage pixels = texture.getPixels();
+            for (int y = 0; y < image.getHeight(); y++) {
+                for (int x = 0; x < image.getWidth(); x++) pixels.setPixel(x, y, image.getRGB(x, y));
+            }
+            texture.upload();
+            manager.register(id, texture);
+            return id;
+        } catch (RuntimeException | Error failure) {
+            texture.close();
+            throw failure;
+        }
+    }
+
+    private static void release(TextureManager manager, List<Identifier> textures) {
+        for (Identifier texture : textures) manager.release(texture);
+    }
+
     public ModelInstance instance() { return model; }
+
+    /** Mounts this model directly in a level. The caller owns the mount and the source. */
+    public RenderPearlWorldModels.Mount mount(ClientLevel level, Matrix4fc placement) {
+        Vec3 origin = new Vec3(placement.m30(), placement.m31(), placement.m32());
+        RenderPearlWorldModels.Mount mount = RenderPearlWorldModels.mount(level, model, origin, textures);
+        mount.setPlacement(origin, new Matrix4f(placement).setTranslation(0, 0, 0));
+        return mount;
+    }
 
     @Override protected Snapshot contentSnapshot(LayerLayout layout, float partialTick) {
         if (model.isClosed() || !layout.includes(0)) return null;

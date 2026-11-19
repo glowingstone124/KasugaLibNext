@@ -5,6 +5,9 @@ import de.javagl.jgltf.impl.v2.Node;
 import de.javagl.jgltf.model.*;
 import de.javagl.jgltf.model.io.GltfAssetReader;
 import de.javagl.jgltf.model.io.GltfModelReader;
+import de.javagl.jgltf.model.io.GltfReference;
+import de.javagl.jgltf.model.io.v2.GltfAssetV2;
+import de.javagl.jgltf.model.v2.GltfModelCreatorV2;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -16,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.*;
 
@@ -60,6 +64,23 @@ public final class GltfLoader {
                 .readWithoutReferences(new ByteArrayInputStream(bytes)).getGltf();
         Set<String> names = animationNames(raw);
         return load(new ByteArrayInputStream(bytes), names);
+    }
+
+    @FunctionalInterface
+    public interface ReferenceReader {
+        byte[] read(String relativeUri) throws IOException;
+    }
+
+    /** Loads a model whose external references are provided by the calling resource system. */
+    public static GltfAsset loadAllAnimations(InputStream input, ReferenceReader references) throws IOException {
+        if (!(new GltfAssetReader().readWithoutReferences(input) instanceof GltfAssetV2 asset)) {
+            throw new IOException("Expected glTF 2.0");
+        }
+        for (GltfReference reference : asset.getReferences()) {
+            reference.getTarget().accept(ByteBuffer.wrap(references.read(reference.getUri())).order(ByteOrder.LITTLE_ENDIAN));
+        }
+        GlTF raw = asset.getGltf();
+        return build(raw, GltfModelCreatorV2.create(asset), animationNames(raw));
     }
 
     private static GltfAsset build(GlTF raw, GltfModel model, Set<String> animationNames) throws IOException {

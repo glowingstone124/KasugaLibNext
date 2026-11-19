@@ -1,6 +1,8 @@
 package lib.kasuga.rendering.models.uml.dynamic.fsm;
 
 import com.mojang.serialization.Codec;
+import lib.kasuga.rendering.models.uml.dynamic.animation.AnimationClip;
+import lib.kasuga.rendering.models.uml.dynamic.animation.ClipSampler;
 import lib.kasuga.rendering.models.uml.dynamic.fsm.state.StateVar;
 import org.junit.jupiter.api.Test;
 
@@ -109,6 +111,25 @@ class StateMachineSnapshotTest {
         }
         assertEquals("walk", loco.active().id());
         assertNull(loco.activeTransition());
+    }
+
+    @Test
+    void repeatedServerSnapshotsKeepACompletedClipAtItsFinalPose() {
+        AnimationClip clip = new AnimationClip(
+                Id.parse("test:snapshot_clip"), .4f, List.of(), List.of(), List.of());
+        StateMachine<Object> client = StateMachine.builder(new Object())
+                .layer("panel", layer -> layer.initial(layer.state("open").clip(ClipSampler.INSTANCE, clip, false)))
+                .clientSide(true)
+                .build();
+        client.setLogicEnabled(false);
+        for (int elapsed : new int[]{12, 32}) {
+            client.conform(new StateMachineSnapshot(1, List.of(
+                    new StateMachineSnapshot.LayerState("panel", "open", elapsed, null, 0f))));
+            client.tick();
+            PoseTarget.ClipTarget clock = client.layer("panel").clipTarget();
+            assertEquals(.4f, clock.prevTime(), 1e-4f);
+            assertEquals(.4f, clock.time(), 1e-4f);
+        }
     }
 
     @Test

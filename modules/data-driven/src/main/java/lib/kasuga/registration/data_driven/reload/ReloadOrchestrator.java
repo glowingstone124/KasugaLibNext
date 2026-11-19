@@ -125,6 +125,9 @@ public final class ReloadOrchestrator implements ScopedResourceManagerConsumer, 
     @Inject
     ResourceSystem resourceSystem;
 
+    private ScopedResourceManager clientResources;
+    private ScopedResourceManager serverResources;
+
     /**
      * The DI entry: discovers nothing itself, it routes through whatever handlers the registry holds.
      * The standard modelling handlers are installed at context startup by the modelling-side registrar,
@@ -157,18 +160,30 @@ public final class ReloadOrchestrator implements ScopedResourceManagerConsumer, 
     }
 
     @Override
-    public void onResourceManagerAdded(@Nullable MinecraftServer server, ScopedResourceManager resourceManager) {
+    public synchronized void onResourceManagerAdded(@Nullable MinecraftServer server, ScopedResourceManager resourceManager) {
+        if (server == null) {
+            clientResources = resourceManager;
+        } else {
+            serverResources = resourceManager;
+        }
         resourceManager.addListener(this);
     }
 
     @Override
-    public void onResourceManagerRemoved(@Nullable MinecraftServer server, ScopedResourceManager resourceManager) {
-        // Machine instances are host-owned (never cleared here); the next reload re-populates definitions.
+    public synchronized void onResourceManagerRemoved(@Nullable MinecraftServer server, ScopedResourceManager resourceManager) {
+        if (clientResources == resourceManager) clientResources = null;
+        if (serverResources == resourceManager) {
+            serverResources = null;
+            if (clientResources != null) reload(clientResources.getResourceManager());
+        }
     }
 
     @Override
-    public void onReloaded(ScopedResourceManager resourceManager) {
-        reload(resourceManager.getResourceManager());
+    public synchronized void onReloaded(ScopedResourceManager resourceManager) {
+        // An integrated server and its client share reload buckets. Keep the active world's
+        // data packs authoritative while the client refreshes its texture and model assets.
+        ScopedResourceManager active = serverResources != null ? serverResources : clientResources;
+        if (resourceManager == active) reload(resourceManager.getResourceManager());
     }
 
     /**
@@ -183,7 +198,7 @@ public final class ReloadOrchestrator implements ScopedResourceManagerConsumer, 
      *
      * @param resourceManager the pack stack to read from; must not be {@code null}
      */
-    public void reload(ResourceManager resourceManager) {
+    public synchronized void reload(ResourceManager resourceManager) {
         try {
             runCycle(resourceManager);
         } catch (RuntimeException e) {

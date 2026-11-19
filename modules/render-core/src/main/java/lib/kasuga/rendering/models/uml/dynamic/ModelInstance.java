@@ -4,6 +4,8 @@ import lib.kasuga.rendering.models.uml.dynamic.morph.MorphInstance;
 import lib.kasuga.rendering.models.uml.backend.DepthBias;
 import lib.kasuga.rendering.models.uml.dynamic.morph.MorphResult;
 import lib.kasuga.rendering.models.uml.dynamic.animation.scope.AnimationRenderPort;
+import lib.kasuga.rendering.models.uml.dynamic.animation.scope.FrameInputSnapshot;
+import lib.kasuga.rendering.models.uml.dynamic.animation.scope.RenderFrameToken;
 import lib.kasuga.rendering.models.uml.dynamic.animation.scope.RenderSampleContext;
 import lib.kasuga.rendering.models.uml.dynamic.physics.SkeletonRagdoll;
 import lib.kasuga.rendering.models.uml.dynamic.physics.ModelPhysicsScene;
@@ -351,7 +353,7 @@ public class ModelInstance implements AutoCloseable {
     public void sample(float partialTick, Object frameToken) {
         java.util.Objects.requireNonNull(frameToken, "frameToken");
         if (sampledRenderFrame == frameToken) return;
-        sample(partialTick);
+        sample(new RenderSampleContext(new RenderFrameToken(frameToken), partialTick, FrameInputSnapshot.empty()));
         sampledRenderFrame = frameToken;
     }
 

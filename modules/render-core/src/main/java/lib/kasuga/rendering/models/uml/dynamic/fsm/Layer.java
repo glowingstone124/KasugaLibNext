@@ -205,8 +205,7 @@ public final class Layer<Owner> {
         active = target;
         activeTransition = null;
         stateElapsedTicks = Math.max(0, elapsedTicks);
-        clipPrevTime = 0f;
-        clipTime = 0f;
+        restoreSyncedClipClock(0f);
         return true;
     }
 
@@ -229,6 +228,15 @@ public final class Layer<Owner> {
         }
         activeTransition = transition;
         transitionElapsed = Math.max(0f, elapsedSeconds);
+        restoreSyncedClipClock(transitionElapsed);
+    }
+
+    private void restoreSyncedClipClock(float fadeSeconds) {
+        // The wire snapshot counts 20 Hz host ticks. Ticks elapsed during a
+        // cross-fade are recorded separately in the transition timer.
+        clipTime = 0f;
+        advanceClipClock(stateElapsedTicks / 20f + fadeSeconds);
+        clipPrevTime = clipTime;
     }
 
     private @Nullable Transition<Owner> findTransition(String id) {

@@ -65,6 +65,18 @@ def prepareRegistrationTemplates = tasks.register('prepareRegistrationTemplates'
     filter(updateMinecraftNames)
     into(templateDirectory)
 }
+def prepareAnimationSources = tasks.register('prepareAnimationSources', Sync) {
+    from(rootProject.file('modules/modelling/src/main/java')) {
+        include 'lib/kasuga/rendering/models/mc/dynamic/fsm/**'
+        exclude 'lib/kasuga/rendering/models/mc/dynamic/fsm/AnimationBlockEntity.java',
+                'lib/kasuga/rendering/models/mc/dynamic/fsm/KasugaModelPipelines.java'
+    }
+    filter { String line ->
+        updateMinecraftNames(line).replace('new ChunkPos(pos)', 'ChunkPos.containing(pos)')
+    }
+    into(layout.buildDirectory.dir('generated/sources/animation/java'))
+}
+sourceSets.main.java.srcDir(prepareAnimationSources)
 sourceSets.main.java.srcDir(prepareRegistrationSources)
 sourceSets.main.java.srcDir(layout.buildDirectory.dir('generated/sources/codegen/java/main'))
 useGenerator(templates: templateDirectory, sources: [registrationDirectory],

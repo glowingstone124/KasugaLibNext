@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
+import lib.kasuga.host.FsmClientSmoke;
 import lib.kasuga.host.ResourcePackSmoke;
 import lib.kasuga.host.RegistrationSmoke;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
@@ -110,7 +111,7 @@ public final class RenderPearlClientSmoke {
         }
         Camera camera = client.gameRenderer.mainCamera();
         if (camera.position().y < 240 || !client.player.getAbilities().flying) return;
-        if (!RegistrationSmoke.clientReady(client)) return;
+        if (!RegistrationSmoke.clientReady(client) || !FsmClientSmoke.ready()) return;
         if (mount == null) {
             try (InputStream input = client.getResourceManager().open(SOURCE)) {
                 model = new ModelInstance(GltfModelConverter.convert(GltfLoader.load(input)),
@@ -168,6 +169,9 @@ public final class RenderPearlClientSmoke {
 
     @SubscribeEvent
     public static void afterFrame(RenderFrameEvent.Post event) {
+        if (!EXPECTED_BACKEND.isEmpty() && cameraRequested && mount == null) {
+            FsmClientSmoke.afterFrame(Minecraft.getInstance());
+        }
         if (mount == null || capturing || ++frames < 12) return;
         capturing = true;
         Minecraft client = Minecraft.getInstance();

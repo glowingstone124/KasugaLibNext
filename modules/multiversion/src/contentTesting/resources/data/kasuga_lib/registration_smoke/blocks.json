@@ -1,6 +1,16 @@
 {
   "blocks": [
     {
+      "id": "kasuga_lib:fsm_smoke_panel",
+      "type": "fsm_block",
+      "properties": {"no_occlusion": true},
+      "state_machine": "kasuga_lib:fsm_smoke",
+      "block_entity": {
+        "type": "fsm_be",
+        "params": {"model": "kasuga_lib:models/smoke/animated_triangle.gltf"}
+      }
+    },
+    {
       "id": "kasuga_lib:registration_smoke_fixture",
       "type": "data_driven_block",
       "properties": {
