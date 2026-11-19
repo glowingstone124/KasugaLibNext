@@ -52,7 +52,8 @@ tasks.register('renderingReleaseCheck') {
             ':modules:render-core:assemble'
     )
     if (modernMinecraft) {
-        dependsOn ':modules:multiversion:check',
+        dependsOn ':modules:inject:check',
+                ':modules:multiversion:check',
                 ':modules:multiversion:compileContentTestingJava',
                 ':modules:multiversion:assemble'
     } else {

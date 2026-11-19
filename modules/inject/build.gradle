@@ -1,7 +1,7 @@
 plugins {
     id 'java-library'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '2.0.107'
+    id 'net.neoforged.moddev'
     id 'idea'
 }
 
@@ -12,8 +12,11 @@ repositories {
 }
 
 
-// Mojang ships Java 21 to end users in 1.21.1, so mods should target Java 21.
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+String minecraftTarget = providers.gradleProperty('kasugaMinecraft').getOrElse('1.21.1')
+boolean modernMinecraft = minecraftTarget == '26.3'
+String neoForgeVersion = modernMinecraft ? neo_version_26_3 : neo_version
+java.toolchain.languageVersion = JavaLanguageVersion.of(modernMinecraft ? 25 : 21)
+sourceSets.main.java.srcDir "src/minecraft${minecraftTarget}/java"
 
 test {
     useJUnitPlatform()
@@ -23,11 +26,13 @@ test {
 
 neoForge {
     // Specify the version of NeoForge to use.
-    version = project.neo_version
+    version = neoForgeVersion
 
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
+    if (!modernMinecraft) {
+        parchment {
+            mappingsVersion = project.parchment_mappings_version
+            minecraftVersion = project.parchment_minecraft_version
+        }
     }
 
     runs {}
@@ -54,7 +59,7 @@ dependencies {
     }
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
-    testImplementation ("net.neoforged:testframework:${project.neo_version}"){
+    testImplementation ("net.neoforged:testframework:${neoForgeVersion}"){
         transitive = false
     }
     testImplementation("io.micronaut.test:micronaut-test-junit5:4.8.1"){
@@ -68,7 +73,9 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     implementation project(":modules:utils")
-    additionalRuntimeClasspath project(":modules:utils")
+    if (!modernMinecraft) {
+        additionalRuntimeClasspath project(":modules:utils")
+    }
 }
 
 tasks.withType(JavaCompile).configureEach {

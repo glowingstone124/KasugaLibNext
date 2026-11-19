@@ -60,16 +60,24 @@ Java 25 and NeoForge 26.3.0.109.
 ```
 
 The 26.3 distributable is the `-all.jar` in `modules/multiversion/build/26.3/libs`.
-It includes the portable model, animation and geometry libraries plus
-`RenderPearlWorldModels`. Mount a `ModelInstance` in the current client level,
-supply its world position and a texture-to-`Identifier` mapping, and update the
-mount's placement as needed. Close the mount when it should leave the world.
+It includes the Micronaut startup and injection APIs, VFS, portable resource lifecycle,
+and the RenderPearl world model adapter. Mount a `ModelInstance` in the current client
+level, supply its world position and a texture-to-`Identifier` mapping, and update
+the mount's placement as needed. Close the mount when it should leave the world.
 The model and textures remain caller-owned.
 
-Model rendering uses the Minecraft entity pipelines on the active graphics
-backend. The 26.3 target currently covers world model submission with CPU skinning.
-The 1.21.1 library contains the Create and UI integrations, custom world effects,
-GPU skinning, and the other Minecraft host APIs that still need a 26.3 port.
+A 26.3 class injected through `Saved<T>` declares a public static
+`SavedDataType<T> TYPE`. Its codec reads the payload of the corresponding 1.21.1
+save when the namespaced 26.3 save is absent. Existing manual registrations that used
+a custom filename can pass that name to `Saved.Impl`. The `configureCommon` and
+`configureServer` callbacks register NeoForge local and synced configs with their
+existing instance-level filenames. NeoForge 26.3 reads per-world synced overrides
+from `syncedconfig`.
+
+Model rendering uses Minecraft entity pipelines on the active graphics backend
+and supports CPU skinning. The remaining Minecraft registry, resource pack, UI
+and custom rendering APIs are being ported. Integration modules whose upstream
+mods still target earlier Minecraft releases stay in the 1.21.1 build.
 
 The 26.3 development client can check both graphics backends using an isolated test
 world and framebuffer readback. The test selects and checks the requested backend:

@@ -2,7 +2,10 @@ plugins {
     id 'java-library'
     id 'net.neoforged.moddev'
     id 'com.gradleup.shadow' version '9.0.2'
+    id 'builder.kasuga.generator'
 }
+
+import builder.kasuga.MicronautServiceShadowTransformer
 
 group = mod_group_id
 version = "${mod_version}+mc26.3"
@@ -17,6 +20,11 @@ repositories {
     maven { url = 'https://libraries.minecraft.net' }
 }
 
+sourceSets.main.java.srcDir(rootProject.file('modules/core/src/shared/java'))
+sourceSets.test.java.srcDir(rootProject.file('modules/core/src/sharedTest/java'))
+
+tasks.named('test') { useJUnitPlatform() }
+
 sourceSets {
     contentTesting {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
@@ -29,6 +37,24 @@ configurations {
 }
 
 dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testRuntimeOnly 'org.slf4j:slf4j-api:2.0.17'
+    testRuntimeOnly 'com.google.code.gson:gson:2.14.0'
+
+    api(project(':modules:inject')) { transitive = false }
+    bundledLibrary(project(':modules:inject')) { transitive = false }
+    contentTestingAnnotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
+    api('io.micronaut:micronaut-inject:4.9.10') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    runtimeOnly('io.micronaut:micronaut-aop:4.9.10') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+    bundledLibrary('io.micronaut:micronaut-aop:4.9.10') {
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }
+
     api(project(':modules:render-core')) { transitive = false }
     api(project(':modules:formula')) { transitive = false }
     api(project(':modules:utils')) { transitive = false }
@@ -96,6 +122,11 @@ neoForge.ideSyncTask generateModMetadata
 tasks.named('shadowJar') {
     configurations = [project.configurations.bundledLibrary]
     mergeServiceFiles()
+    transform(MicronautServiceShadowTransformer) {}
+    relocate 'io.micronaut', 'lib.kasuga.vendors.io.micronaut'
+    relocate 'jakarta.inject', 'lib.kasuga.vendors.jakarta.inject'
+    relocate 'jakarta.annotation', 'lib.kasuga.vendors.jakarta.annotation'
+    relocate 'lib.kasuga.inject', 'lib.kasuga.vendors.inject'
     relocate 'de.javagl', 'lib.kasuga.vendors.javagl'
     relocate 'com.fasterxml.jackson', 'lib.kasuga.vendors.jackson'
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class', 'META-INF/versions/*/module-info.class'

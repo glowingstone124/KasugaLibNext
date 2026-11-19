@@ -1,7 +1,5 @@
 package lib.kasuga.inject;
 
-import net.neoforged.fml.loading.FMLLoader;
-
 /**
  * This class is a utility for environment detecting.
  */
@@ -12,7 +10,7 @@ public class Envs {
      * @return is we are in dev environment?
      */
     public static boolean isDevEnvironment() {
-        return !FMLLoader.isProduction();
+        return lib.kasuga.inject.class_loader.Envs.isDevEnvironment();
     }
 
     /**
@@ -20,7 +18,7 @@ public class Envs {
      * @return is the game a client?
      */
     public static boolean isClient() {
-        return FMLLoader.getDist().isClient();
+        return lib.kasuga.inject.class_loader.Envs.isClient();
     }
 
     /**
@@ -29,6 +27,6 @@ public class Envs {
      * @return is the game a dedicated server?
      */
     public static boolean isDedicatedServer() {
-        return FMLLoader.getDist().isDedicatedServer();
+        return lib.kasuga.inject.class_loader.Envs.isDedicatedServer();
     }
 }

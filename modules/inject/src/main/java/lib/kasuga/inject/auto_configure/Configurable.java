@@ -15,30 +15,32 @@ public interface Configurable {
         ModConfigSpec.Builder specStartUp = new ModConfigSpec.Builder();
         for (Configurable configurable : context.getBeansOfType(Configurable.class)) {
             configurable.onConfigure(ModConfig.Type.CLIENT, specClient);
-            configurable.onConfigure(ModConfig.Type.SERVER, specServer);
-            configurable.onConfigure(ModConfig.Type.COMMON, specCommon);
+            configurable.onConfigure(ConfigurationTypes.SERVER, specServer);
+            configurable.onConfigure(ConfigurationTypes.COMMON, specCommon);
             configurable.onConfigure(ModConfig.Type.STARTUP, specStartUp);
         }
         registerConfig(modContainer, ModConfig.Type.CLIENT, specClient);
-        registerConfig(modContainer, ModConfig.Type.SERVER, specServer);
-        registerConfig(modContainer, ModConfig.Type.COMMON, specCommon);
+        registerConfig(modContainer, ConfigurationTypes.SERVER, specServer);
+        registerConfig(modContainer, ConfigurationTypes.COMMON, specCommon);
         registerConfig(modContainer, ModConfig.Type.STARTUP, specStartUp);
     }
 
 
     private static void registerConfig(ModContainer modContainer, ModConfig.Type type, ModConfigSpec.Builder specBuilder) {
         IConfigSpec spec = specBuilder.build();
-        if(spec.isEmpty())
-            return;
-        modContainer.registerConfig(type, spec);
+        if (spec.isEmpty()) return;
+        String suffix = type == ConfigurationTypes.COMMON ? "common"
+                : type == ConfigurationTypes.SERVER ? "server"
+                : type.name().toLowerCase(java.util.Locale.ROOT);
+        modContainer.registerConfig(type, spec, modContainer.getModId() + "-" + suffix + ".toml");
     }
 
     public default void onConfigure(ModConfig.Type type, ModConfigSpec.Builder builder) {
         if(type == ModConfig.Type.CLIENT)
             configureClient(builder);
-        else if(type == ModConfig.Type.SERVER)
+        else if(type == ConfigurationTypes.SERVER)
             configureServer(builder);
-        else if(type == ModConfig.Type.COMMON)
+        else if(type == ConfigurationTypes.COMMON)
             configureCommon(builder);
         else if(type == ModConfig.Type.STARTUP)
             configureStartup(builder);

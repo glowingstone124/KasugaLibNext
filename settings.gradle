@@ -22,6 +22,7 @@ if (!(minecraftTarget in ['1.21.1', '26.3'])) {
 
 include ':modules:utils'
 include ':modules:formula'
+include ':modules:inject'
 include ':modules:resource-compiler'
 include ':modules:shader'
 include ':modules:shader-graal'
@@ -33,7 +34,6 @@ if (minecraftTarget == '26.3') {
     include ':modules:render-opengl'
     include ':modules:core'
     include ':modules:data-driven'
-    include ':modules:inject'
     include ':modules:create'
     include ':modules:scripting'
     include ':modules:modelling'

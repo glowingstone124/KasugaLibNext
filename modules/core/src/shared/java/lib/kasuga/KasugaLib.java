@@ -2,10 +2,7 @@ package lib.kasuga;
 
 import io.micronaut.context.ApplicationContext;
 
-import lib.kasuga.content.document.DocumentComponentRegistries;
-import lib.kasuga.content.document.DocumentItem;
 import lib.kasuga.inject.ModApplicationContext;
-import net.minecraft.network.chat.Component;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModLoader;
 import net.neoforged.fml.common.Mod;
