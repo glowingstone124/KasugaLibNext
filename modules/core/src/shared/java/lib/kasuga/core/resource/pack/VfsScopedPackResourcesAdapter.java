@@ -16,17 +16,23 @@ import java.util.stream.Stream;
  */
 public final class VfsScopedPackResourcesAdapter implements HierarchicalScopedPackResources, FlattenScopedPackResources {
     private final VirtualFileSystem vfs;
+    private final VfsPath root;
 
     public VfsScopedPackResourcesAdapter(VirtualFileSystem vfs) {
+        this(vfs, VfsPath.ROOT);
+    }
+
+    VfsScopedPackResourcesAdapter(VirtualFileSystem vfs, VfsPath root) {
         this.vfs = Objects.requireNonNull(vfs, "vfs");
+        this.root = Objects.requireNonNull(root, "root");
     }
 
     public VirtualFileSystem vfs() {
         return vfs;
     }
 
-    private static VfsPath toVfsPath(String prefix, String path) {
-        return ScopedPackResources.toLogicalPath(prefix, path);
+    private VfsPath toVfsPath(String prefix, String path) {
+        return root.resolve(ScopedPackResources.toLogicalPath(prefix, path));
     }
 
     @Override
@@ -57,7 +63,7 @@ public final class VfsScopedPackResourcesAdapter implements HierarchicalScopedPa
     @Override
     public Stream<String> listEntries(String prefix) {
         try {
-            VfsPath prefixPath = ScopedPackResources.toLogicalPath(prefix == null ? "" : prefix);
+            VfsPath prefixPath = toVfsPath(prefix, "");
             return vfs.walk(prefixPath).stream()
                     .map(entry -> prefixPath.relativize(entry).asString())
                     .filter(s -> !s.isEmpty());

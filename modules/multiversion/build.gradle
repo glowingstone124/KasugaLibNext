@@ -44,6 +44,7 @@ dependencies {
 
     api(project(':modules:inject')) { transitive = false }
     bundledLibrary(project(':modules:inject')) { transitive = false }
+    annotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
     contentTestingAnnotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
     api('io.micronaut:micronaut-inject:4.9.10') {
         exclude group: 'org.slf4j', module: 'slf4j-api'

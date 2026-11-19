@@ -8,21 +8,17 @@ import lib.kasuga.core.vfs.VfsPath;
 import lib.kasuga.core.vfs.VfsSubscription;
 import lib.kasuga.core.vfs.VirtualFileSystem;
 import lib.kasuga.core.vfs.backend.MountTableVfs;
-import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.packs.resources.ReloadableResourceManager;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.GameShuttingDownEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -33,8 +29,8 @@ import org.slf4j.LoggerFactory;
 public class ResourceSystem implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(ResourceSystem.class);
 
-    ScopedResourceManager client = null;
-    HashMap<MinecraftServer, ScopedResourceManager> managers = new HashMap<>();
+    volatile ScopedResourceManager client = null;
+    ConcurrentHashMap<MinecraftServer, ScopedResourceManager> managers = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<AutoCloseable> managedCloseables = new CopyOnWriteArrayList<>();
     private final ConcurrentHashMap<MinecraftServer, CopyOnWriteArrayList<AutoCloseable>> serverManagedCloseables = new ConcurrentHashMap<>();
     private final CopyOnWriteArrayList<AutoCloseable> clientManagedCloseables = new CopyOnWriteArrayList<>();
@@ -60,37 +56,32 @@ public class ResourceSystem implements AutoCloseable {
     public void init() {
         eventBus.addListener(this::onServerStarting);
         eventBus.addListener(this::onServerStopping);
-        modEventBus.addListener(this::onClientSetup);
+        ResourcePlatform.installClientHook(this, modEventBus, eventBus);
         modEventBus.addListener(approvedPacks::onAddPackFinders);
         eventBus.addListener((GameShuttingDownEvent event) -> close());
     }
 
-    private void onClientSetup(FMLClientSetupEvent event) {
-        Minecraft minecraft = Minecraft.getInstance();
-        ResourceManager manager = minecraft.getResourceManager();
-        ScopedResourceManager srm = new ScopedResourceManager(manager);
-        client = srm;
-        if(manager instanceof ReloadableResourceManager reloadable) {
-            reloadable.registerReloadListenerIfNotPresent(srm);
+    void onClientReloaded(ResourceManager manager) {
+        ScopedResourceManager current = client;
+        if (current != null) {
+            current.reload(manager);
+            return;
         }
+
+        current = new ScopedResourceManager(manager);
+        client = current;
         for (ScopedResourceManagerConsumer consumer : this.consumers) {
-            consumer.onResourceManagerAdded(null, client);
+            consumer.onResourceManagerAdded(null, current);
         }
     }
 
     private void onServerStarting(ServerStartingEvent event) {
-        managers.computeIfAbsent(
-                event.getServer(),
-                rm -> {
-                    ScopedResourceManager srm = new ScopedResourceManager(rm.getResourceManager());
-                    if(rm.getResourceManager() instanceof ReloadableResourceManager reloadable) {
-                        reloadable.registerReloadListenerIfNotPresent(srm);
-                    }
-                    return srm;
-                }
-        );
+        MinecraftServer server = event.getServer();
+        ScopedResourceManager manager = managers.computeIfAbsent(server,
+                owner -> new ScopedResourceManager(owner.getResourceManager()));
+        ResourcePlatform.installServerListener(manager);
         for (ScopedResourceManagerConsumer consumer : this.consumers) {
-            consumer.onResourceManagerAdded(event.getServer(), managers.get(event.getServer()));
+            consumer.onResourceManagerAdded(server, manager);
         }
     }
 
@@ -278,7 +269,7 @@ public class ResourceSystem implements AutoCloseable {
     }
 
     public ScopedResourceManager getManager(Level level) {
-        if(level.isClientSide) {
+        if(level.isClientSide()) {
             return getServerManager(null);
         } else if(level instanceof ServerLevel serverLevel) {
             return getServerManager(serverLevel.getServer());
@@ -286,7 +277,7 @@ public class ResourceSystem implements AutoCloseable {
         throw new IllegalStateException("Unknown level: " + level);
     }
 
-    public List<ScopedResourceManagerConsumer> consumers = new ArrayList<>();
+    public List<ScopedResourceManagerConsumer> consumers = new CopyOnWriteArrayList<>();
 
     public void registerConsumer(ScopedResourceManagerConsumer consumer) {
         consumers.add(consumer);

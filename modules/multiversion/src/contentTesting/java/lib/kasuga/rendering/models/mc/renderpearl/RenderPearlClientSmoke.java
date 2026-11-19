@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
+import lib.kasuga.host.ResourcePackSmoke;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfLoader;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfModelConverter;
@@ -49,13 +50,14 @@ public final class RenderPearlClientSmoke {
     private RenderPearlClientSmoke() {}
 
     @SubscribeEvent
-    public static void tick(ClientTickEvent.Post event) {
+    public static void tick(ClientTickEvent.Post event) throws IOException {
         if (EXPECTED_BACKEND.isEmpty()) return;
         Minecraft client = Minecraft.getInstance();
         if (System.nanoTime() - START > 180_000_000_000L) {
             throw new IllegalStateException("Timed out waiting for the RenderPearl smoke world");
         }
         if (createdWorld || client.gui.overlay() != null || client.gui.screen() == null) return;
+        if (!ResourcePackSmoke.clientReady()) return;
         String actualBackend = RenderSystem.getDevice().getDeviceInfo().backendName();
         if (!actualBackend.toLowerCase(Locale.ROOT).contains(EXPECTED_BACKEND.toLowerCase(Locale.ROOT))) {
             throw new IllegalStateException("Expected " + EXPECTED_BACKEND + ", got " + actualBackend);

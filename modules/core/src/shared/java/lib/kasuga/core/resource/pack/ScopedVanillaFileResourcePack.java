@@ -1,5 +1,6 @@
 package lib.kasuga.core.resource.pack;
 
+import lib.kasuga.core.vfs.VfsPath;
 import lib.kasuga.core.vfs.VirtualFileSystem;
 import lib.kasuga.core.vfs.backend.ZipVfs;
 
@@ -14,8 +15,13 @@ public class ScopedVanillaFileResourcePack implements FlattenScopedPackResources
     private final VfsScopedPackResourcesAdapter delegate;
 
     public ScopedVanillaFileResourcePack(ZipFile zipFile) {
+        this(zipFile, "");
+    }
+
+    public ScopedVanillaFileResourcePack(ZipFile zipFile, String prefix) {
         this.zipFile = zipFile;
-        this.delegate = new VfsScopedPackResourcesAdapter(new ZipVfs(zipFile.getName(), zipFile, false));
+        VfsPath root = ScopedPackResources.toLogicalPath(prefix);
+        this.delegate = new VfsScopedPackResourcesAdapter(new ZipVfs(zipFile.getName(), zipFile, false), root);
     }
 
     public VirtualFileSystem vfs() {

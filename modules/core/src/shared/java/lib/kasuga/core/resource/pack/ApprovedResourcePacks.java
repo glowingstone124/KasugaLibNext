@@ -5,10 +5,11 @@ import lib.kasuga.core.resource.lifecycle.*;
 import lib.kasuga.core.resource.routing.ResourceRouting;
 import lib.kasuga.core.resource.source.*;
 import lib.kasuga.core.resource.view.ResourceCatalog;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.packs.*;
 import net.minecraft.server.packs.repository.*;
 import net.neoforged.neoforge.event.AddPackFindersEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -16,6 +17,8 @@ import java.util.function.Consumer;
 
 /** Register at host bootstrap; the installed finder participates in initial and later repository discovery. */
 public final class ApprovedResourcePacks implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ApprovedResourcePacks.class);
+
     private record Registration(String id, List<ResourceSource> sources, ResourceRouting plan) {}
     private final Map<String, Registration> registrations = new LinkedHashMap<>();
     private final List<ResourceSnapshot> clientSnapshots = new ArrayList<>(), serverSnapshots = new ArrayList<>();
@@ -53,20 +56,25 @@ public final class ApprovedResourcePacks implements AutoCloseable {
                     ResourceSourceDescriptor source = layer.getValue().getFirst().file().descriptor().source();
                     List<ResourceRouting.Route> inputs = List.copyOf(layer.getValue());
                     String id = "kasuga/" + registration.id() + "/" + source.sourceId() + "/" + source.rootId();
-                    var location = new PackLocationInfo(id, Component.literal(id), PackSource.BUILT_IN, Optional.empty());
-                    var supplier = new Pack.ResourcesSupplier() {
-                        @Override public PackResources openPrimary(PackLocationInfo info) { return new MappedPackResources(info, inputs, type); }
-                        @Override public PackResources openFull(PackLocationInfo info, Pack.Metadata metadata) { return openPrimary(info); }
-                    };
-                    Pack pack = Pack.readMetaAndCreate(location, supplier, type, new PackSelectionConfig(true, Pack.Position.TOP, true));
+                    Pack pack = PlatformPacks.create(id, inputs, type);
                     if (pack == null) throw new IOException("Invalid projected pack metadata: " + id);
                     discovered.add(new OrderedPack(pack, source.rank()));
                 }
             }
-            List<ResourceSnapshot> old = type == PackType.CLIENT_RESOURCES ? clientSnapshots : serverSnapshots;
-            closeSnapshots(old); old.addAll(pending); pending.clear();
-            discovered.stream().sorted(Comparator.comparingInt(OrderedPack::rank).thenComparing(p -> p.pack().getId()))
-                    .map(OrderedPack::pack).forEach(output);
+            discovered.sort(Comparator.comparingInt(OrderedPack::rank).thenComparing(p -> p.pack().getId()));
+            List<Pack> ordered = new ArrayList<>(discovered.size());
+            for (OrderedPack entry : discovered) ordered.add(entry.pack());
+            PlatformPacks.publish(type, ordered, output);
+            List<ResourceSnapshot> active = type == PackType.CLIENT_RESOURCES ? clientSnapshots : serverSnapshots;
+            List<ResourceSnapshot> retired = new ArrayList<>(active);
+            active.clear();
+            active.addAll(pending);
+            pending.clear();
+            try {
+                closeSnapshots(retired);
+            } catch (UncheckedIOException e) {
+                LOGGER.warn("Could not clean up retired resource pack snapshots", e);
+            }
         } catch (IOException e) { throw new UncheckedIOException("Resource projection failed", e); }
         finally { closeSnapshots(pending); }
     }

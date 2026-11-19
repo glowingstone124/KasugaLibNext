@@ -60,8 +60,8 @@ Java 25 and NeoForge 26.3.0.109.
 ```
 
 The 26.3 distributable is the `-all.jar` in `modules/multiversion/build/26.3/libs`.
-It includes the Micronaut startup and injection APIs, VFS, portable resource lifecycle,
-and the RenderPearl world model adapter. Mount a `ModelInstance` in the current client
+It includes the Micronaut startup and injection APIs, VFS, resource pack scopes and
+reload events, and the RenderPearl world model adapter. Mount a `ModelInstance` in the current client
 level, supply its world position and a texture-to-`Identifier` mapping, and update
 the mount's placement as needed. Close the mount when it should leave the world.
 The model and textures remain caller-owned.
@@ -74,8 +74,12 @@ a custom filename can pass that name to `Saved.Impl`. The `configureCommon` and
 existing instance-level filenames. NeoForge 26.3 reads per-world synced overrides
 from `syncedconfig`.
 
+Approved VFS resource layers load in their configured priority order under the
+`kasuga/approved` pack. Kasuga's client and server reload events run after the
+host publishes the reloaded resource manager.
+
 Model rendering uses Minecraft entity pipelines on the active graphics backend
-and supports CPU skinning. The remaining Minecraft registry, resource pack, UI
+and supports CPU skinning. The remaining Minecraft registry, UI
 and custom rendering APIs are being ported. Integration modules whose upstream
 mods still target earlier Minecraft releases stay in the 1.21.1 build.
 
