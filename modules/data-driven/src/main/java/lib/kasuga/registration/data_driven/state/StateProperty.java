@@ -136,7 +136,7 @@ public final class StateProperty<T extends Comparable<T>> {
                 || !(reader instanceof Level level) || level.restoringBlockSnapshots) return;
         for (Property<?> property : newState.getProperties()) {
             CopyOnWriteArrayList<Listener<?>> listeners = LISTENERS.get(new Key(newState.getBlock(), property));
-            if (listeners != null) notifyProperty(reader, level.isClientSide, pos, oldState, newState, property, listeners);
+            if (listeners != null) notifyProperty(reader, level.isClientSide(), pos, oldState, newState, property, listeners);
         }
     }
 

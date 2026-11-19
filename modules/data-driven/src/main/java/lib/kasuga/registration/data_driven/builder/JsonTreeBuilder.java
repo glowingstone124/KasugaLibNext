@@ -68,12 +68,13 @@ public class JsonTreeBuilder {
         ensureHandlersRegistered();
         clearLoadingErrors(modId);
 
-        Path indexDir = findIndexDir(modId);
-        if (indexDir == null) {
-            Path legacyDir = findLegacyDataDrivenDir(modId);
-            if (legacyDir != null) {
+        IModFile modFile = findModFile(modId);
+        List<RegistrationFile> indexFiles = modFile == null ? null : RegistrationResources.manifests(modFile, modId);
+        if (indexFiles == null) {
+            boolean legacy = modFile != null && RegistrationResources.hasLegacyLayout(modFile, modId);
+            if (legacy) {
                 String msg = "Mod '" + modId + "' still ships the deprecated data-driven layout at "
-                        + "'data/" + modId + "/kasugalib/' (" + legacyDir + "), which is no longer read. "
+                        + "'data/" + modId + "/kasugalib/', which is no longer read. "
                         + "Migrate the content files and add an index manifest at "
                         + "'data/" + modId + "/kasuga_lib/data_driven/<name>.json' that lists them in an "
                         + "\"on_register\" array (paths relative to 'data/" + modId + "/').";
@@ -95,8 +96,8 @@ public class JsonTreeBuilder {
         // so a path listed in both domains can be rejected fail-closed (D6); each content file is
         // then parsed at most once per mod, even if referenced from several manifests.
         List<IndexManifest> manifests = new ArrayList<>();
-        for (Path path : listIndexFiles(indexDir, modId)) {
-            manifests.add(readIndexManifest(path, modId));
+        for (RegistrationFile file : indexFiles) {
+            manifests.add(readIndexManifest(file, modId));
         }
         ResolvedIndex index = resolveIndexManifests(modId, manifests);
 
@@ -113,7 +114,7 @@ public class JsonTreeBuilder {
         Map<TypeHandler<?>, List<ParsedEntry>> parsed = new LinkedHashMap<>();
         Set<String> parsedSources = new HashSet<>();
         for (String sourcePath : index.onRegisterPaths()) {
-            parseSource(modId, sourcePath, parsedSources, parsed);
+            parseSource(modFile, modId, sourcePath, parsedSources, parsed);
         }
 
         int totalEntries = parsed.values().stream().mapToInt(List::size).sum();
@@ -191,9 +192,10 @@ public class JsonTreeBuilder {
      * valid JSON is reported and treated as declaring nothing, so it does not abort the other
      * manifests of the same mod.
      */
-    private static IndexManifest readIndexManifest(Path path, String modId) {
-        String label = path.getFileName() != null ? path.getFileName().toString() : path.toString();
-        try (Reader reader = Files.newBufferedReader(path)) {
+    private static IndexManifest readIndexManifest(RegistrationFile file, String modId) {
+        String path = file.path();
+        String label = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1);
+        try (Reader reader = file.reader().get()) {
             JsonObject root = GSON.fromJson(reader, JsonObject.class);
             return parseIndexManifest(modId, label, root);
         } catch (Exception e) {
@@ -416,7 +418,7 @@ public class JsonTreeBuilder {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private static void parseSource(String modId, String sourcePath, Set<String> parsedSources, Map parsed) {
+    private static void parseSource(IModFile modFile, String modId, String sourcePath, Set<String> parsedSources, Map parsed) {
         String invalid = validateSourcePath(sourcePath);
         if (invalid != null) {
             String msg = "Invalid source path '" + sourcePath + "' for mod '" + modId + "': " + invalid;
@@ -429,31 +431,22 @@ public class JsonTreeBuilder {
         }
 
         try {
-            IModFile modFile = findModFile(modId);
-            if (modFile == null) {
-                String msg = "No mod file found for mod '" + modId + "' while resolving source '" + sourcePath + "'";
-                LOGGER.error(msg);
-                addLoadingError(modId, new IOException(msg));
-                return;
-            }
-            // sourcePath is relative to data/<mod>/ and already includes the ".json" suffix;
-            // IModFile.findResource resolves segments literally (no extension appended).
             String[] sourceParts = sourcePath.split("/");
             String[] pathSegments = new String[sourceParts.length + 2];
             pathSegments[0] = "data";
             pathSegments[1] = modId;
             System.arraycopy(sourceParts, 0, pathSegments, 2, sourceParts.length);
-            Path contentPath = modFile.findResource(pathSegments);
-            if (!Files.isRegularFile(contentPath)) {
+            RegistrationFile file = RegistrationResources.file(modFile, pathSegments);
+            if (file == null) {
                 String msg = "Source file not found for mod '" + modId + "': data/" + modId + "/" + sourcePath;
                 LOGGER.error(msg);
                 addLoadingError(modId, new IOException(msg));
                 return;
             }
-            try (Reader reader = Files.newBufferedReader(contentPath)) {
+            try (Reader reader = file.reader().get()) {
                 JsonObject content = GSON.fromJson(reader, JsonObject.class);
                 if (content == null) return;
-                dispatchContent(content, modId, contentPath.toString(), sourcePath, parsed);
+                dispatchContent(content, modId, file.path(), sourcePath, parsed);
             }
         } catch (Exception e) {
             LOGGER.error("Error parsing source '{}' for mod '{}': {}", sourcePath, modId, e.getMessage());
@@ -792,30 +785,6 @@ public class JsonTreeBuilder {
             addLoadingError(modId, new IOException(msg, e));
             return List.of();
         }
-    }
-
-    private static Path findIndexDir(String modId) {
-        IModFile modFile = findModFile(modId);
-        if (modFile == null) return null;
-        Path dir = modFile.findResource(indexDirectorySegments(modId));
-        if (Files.isDirectory(dir)) {
-            return dir;
-        }
-        return null;
-    }
-
-    /**
-     * Locates the pre-migration data-driven directory {@code data/<mod_id>/kasugalib/}, if present.
-     * The directory's contents are never read; it only backs the migration warning raised by
-     * {@link #buildForMod(String)} so an ignored old layout is no longer silent.
-     *
-     * @return the legacy directory, or {@code null} when the mod never shipped one (or has no mod file)
-     */
-    private static Path findLegacyDataDrivenDir(String modId) {
-        IModFile modFile = findModFile(modId);
-        if (modFile == null) return null;
-        Path legacy = modFile.findResource("data", modId, "kasugalib");
-        return Files.isDirectory(legacy) ? legacy : null;
     }
 
     // --- loading errors (one bucket per mod; see loadingErrorsByMod) ---

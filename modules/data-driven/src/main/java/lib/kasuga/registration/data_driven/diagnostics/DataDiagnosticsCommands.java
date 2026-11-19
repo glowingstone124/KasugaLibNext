@@ -44,7 +44,7 @@ public final class DataDiagnosticsCommands {
      */
     public static LiteralArgumentBuilder<CommandSourceStack> kasugaDataCommand() {
         return Commands.literal("kasuga_data")
-                .requires(source -> source.hasPermission(2))
+                .requires(DiagnosticPermissions::canInspectData)
                 .then(Commands.literal("errors")
                         .executes(context -> printSummary(context.getSource()))
                         .then(Commands.argument("mod", StringArgumentType.word())

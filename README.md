@@ -78,13 +78,22 @@ Approved VFS resource layers load in their configured priority order under the
 `kasuga/approved` pack. Kasuga's client and server reload events run after the
 host publishes the reloaded resource manager.
 
+The 26.3 target includes the generated Minecraft registration API and the
+data-driven registration and reload pipeline. Use `KasugaLibRegistry.getRegistryOf(modId)`
+to create a registry on the mod event bus. Minecraft-facing methods use
+`Identifier`, and block and item factories receive properties with the resolved
+registry key. The same data-driven manifests serve both Minecraft versions.
+Registration reads `on_register` from the owning mod, and resource reload reads
+`on_reload` from the active pack stack.
+
 Model rendering uses Minecraft entity pipelines on the active graphics backend
 and supports CPU skinning. Point, area, and volumetric lights use RenderPearl
 with the same lighting shader calculations as 1.21.1. Nested world scenes can
 own model and light nodes. Native Blockbench models use their authored Locator
 lights and the same evaluated bone pose as their geometry. See the
 [world-space light guide](doc/guides/world-lights.md).
-Minecraft registration, native model previews, world UI, and other custom rendering APIs are being ported.
+Kasuga document and device registration, native model previews, world UI, and
+other custom rendering APIs are being ported.
 Integration modules whose upstream mods still target earlier Minecraft releases
 stay in the 1.21.1 build.
 
@@ -97,7 +106,8 @@ world and framebuffer readback. The test selects and checks the requested backen
 
 Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_RENDERPEARL_PASS`, `KASUGA_WORLD_LIGHTS_PASS`,
-`KASUGA_SCENE_LIGHTS_PASS`, and `KASUGA_BLOCKBENCH_LIGHT_PASS`, then saves the
+`KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`, and
+`KASUGA_REGISTRATION_PASS`, then saves the
 model and lighting captures in the test game directory.
 
 Run the focused release gate with:

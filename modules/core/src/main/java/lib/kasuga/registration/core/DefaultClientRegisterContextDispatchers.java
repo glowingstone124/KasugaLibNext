@@ -8,6 +8,7 @@ import lib.kasuga.registration.stages.BakingCompleteStage;
 import lib.kasuga.registration.stages.FluidClientExtensionsStage;
 import lib.kasuga.registration.stages.MenuScreenBindingStage;
 import lib.kasuga.registration.stages.RegistrationStage;
+import lib.kasuga.registration.stages.RegistrationStageContext;
 import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.extensions.common.RegisterClientExtensionsEvent;
@@ -36,6 +37,8 @@ public class DefaultClientRegisterContextDispatchers {
             });
 
             modEventBus.addListener(ModelEvent.BakingCompleted.class, (event)->{
+                contextRegistry.dispatch(RegisterContextRegistry.Side.CLIENT, registry,
+                        new RegisterContext<>(RegistrationStage.REGISTER_RENDERERS, new RegistrationStageContext()));
                 contextRegistry.dispatch(RegisterContextRegistry.Side.CLIENT, registry, new RegisterContext<>(
                         RegistrationStage.BAKING_COMPLETE,
                         new BakingCompleteStage()

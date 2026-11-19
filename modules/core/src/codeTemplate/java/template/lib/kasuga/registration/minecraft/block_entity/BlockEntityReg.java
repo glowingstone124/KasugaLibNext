@@ -8,6 +8,7 @@ import lib.kasuga.registration.core.ModifierType;
 import lib.kasuga.registration.core.RegisterContext;
 import lib.kasuga.registration.core.ScopeHelper;
 import lib.kasuga.registration.minecraft.common.MinecraftDeferRegistryReg;
+import lib.kasuga.registration.minecraft.common.RegistrationPlatform;
 import lib.kasuga.registration.minecraft.block.BlockSupplier;
 import lib.kasuga.registration.stages.RegistrationStage;
 import lib.kasuga.structure.Pair;
@@ -100,7 +101,7 @@ public class BlockEntityReg<T extends BlockEntity> extends MinecraftDeferRegistr
         validBlocks = this.applyProperties(Collection.class, validBlocks);
         Type<?> dataType = RegFacade.transformObject("DataType", null);
         Block[] blocks = validBlocks.toArray(new Block[0]);
-        return BlockEntityType.Builder.of(supplier.apply(this), blocks).build(dataType);
+        return RegistrationPlatform.blockEntityType(supplier.apply(this), blocks, dataType);
     }
 
 

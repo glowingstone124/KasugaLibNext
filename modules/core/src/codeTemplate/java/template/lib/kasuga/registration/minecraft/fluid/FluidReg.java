@@ -219,6 +219,7 @@ public class FluidReg<S extends BaseFlowingFluid.Source, F extends BaseFlowingFl
 
     @Override
     public void register(RegisterContext<?> context) {
+        context.onStage(RegistrationStage.REGISTER_FLUID_MODELS, stage -> stage.register(this));
         castStage(context, ctx -> {
             if (ctx.getRegistryKey() == net.minecraft.core.registries.Registries.FLUID) {
                 registerFluids(ctx);
@@ -227,10 +228,8 @@ public class FluidReg<S extends BaseFlowingFluid.Source, F extends BaseFlowingFl
     }
 
     private void registerFluids(RegisterStageContext context) {
-        ResourceLocation sid = applyProperties(ResourceLocation.class,
-                ResourceLocation.fromNamespaceAndPath("minecraft", sourceName));
-        ResourceLocation fid = applyProperties(ResourceLocation.class,
-                ResourceLocation.fromNamespaceAndPath("minecraft", flowingName));
+        ResourceLocation sid = resolveFluidId(sourceName);
+        ResourceLocation fid = resolveFluidId(flowingName);
         this.sourceId = sid;
         this.flowingId = fid;
 
@@ -272,6 +271,11 @@ public class FluidReg<S extends BaseFlowingFluid.Source, F extends BaseFlowingFl
             stage.register(net.minecraft.core.registries.Registries.FLUID, sid, () -> sourceFactory.apply(fluidProperties));
             stage.register(net.minecraft.core.registries.Registries.FLUID, fid, () -> flowingFactory.apply(fluidProperties));
         }
+    }
+
+    private ResourceLocation resolveFluidId(String name) {
+        ResourceLocation base = ResourceLocation.fromNamespaceAndPath("minecraft", name);
+        return applyProperties(ResourceLocation.class, transform(ResourceLocationModifiers.ID, base));
     }
 
     @SuppressWarnings("unchecked")

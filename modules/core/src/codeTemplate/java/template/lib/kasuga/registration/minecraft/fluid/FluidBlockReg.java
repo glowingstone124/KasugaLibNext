@@ -6,6 +6,7 @@ import lib.kasuga.internal.generator.annotations.RegGenerator;
 import lib.kasuga.registration.core.ChildrenLookup;
 import lib.kasuga.registration.minecraft.fluid.FluidReg;
 import lib.kasuga.registration.minecraft.common.MinecraftDeferRegistryReg;
+import lib.kasuga.registration.minecraft.common.RegistrationPlatform;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
@@ -87,7 +88,7 @@ public class FluidBlockReg<T extends LiquidBlock> extends MinecraftDeferRegistry
     protected T createObject(ResourceLocation id) {
         BlockBehaviour.Properties properties = this.transform(FluidBlockRegModifiers.TYPE_BLOCK_PROPERTIES, BlockBehaviour.Properties.of());
         properties = this.applyProperties(BlockBehaviour.Properties.class, properties);
-        return supplier.apply(this).apply(getFluid()).apply(properties);
+        return supplier.apply(this).apply(getFluid()).apply(RegistrationPlatform.blockProperties(id, properties));
     }
 
     /**

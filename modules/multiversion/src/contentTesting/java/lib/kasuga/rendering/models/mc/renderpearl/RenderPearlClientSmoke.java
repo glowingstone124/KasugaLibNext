@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.host.ResourcePackSmoke;
+import lib.kasuga.host.RegistrationSmoke;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
 import lib.kasuga.rendering.lighting.LightColor;
 import lib.kasuga.rendering.lighting.LightSource;
@@ -109,6 +110,7 @@ public final class RenderPearlClientSmoke {
         }
         Camera camera = client.gameRenderer.mainCamera();
         if (camera.position().y < 240 || !client.player.getAbilities().flying) return;
+        if (!RegistrationSmoke.clientReady(client)) return;
         if (mount == null) {
             try (InputStream input = client.getResourceManager().open(SOURCE)) {
                 model = new ModelInstance(GltfModelConverter.convert(GltfLoader.load(input)),

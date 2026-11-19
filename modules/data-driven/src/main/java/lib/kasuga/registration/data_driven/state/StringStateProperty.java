@@ -2,7 +2,6 @@ package lib.kasuga.registration.data_driven.state;
 
 import net.minecraft.world.level.block.state.properties.Property;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,8 +15,12 @@ public final class StringStateProperty extends Property<String> {
     }
 
     @Override
-    public Collection<String> getPossibleValues() {
+    public List<String> getPossibleValues() {
         return values;
+    }
+
+    public int getInternalIndex(String value) {
+        return values.indexOf(value);
     }
 
     @Override

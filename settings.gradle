@@ -27,6 +27,7 @@ include ':modules:resource-compiler'
 include ':modules:shader'
 include ':modules:shader-graal'
 include ':modules:render-core'
+include ':modules:generator'
 
 if (minecraftTarget == '26.3') {
     include ':modules:multiversion'
@@ -37,7 +38,6 @@ if (minecraftTarget == '26.3') {
     include ':modules:create'
     include ':modules:scripting'
     include ':modules:modelling'
-    include ':modules:generator'
     include ':modules:annotations'
     include ':modules:library'
     include ':external:slp:javet'

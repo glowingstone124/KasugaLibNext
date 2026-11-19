@@ -14,7 +14,6 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.network.handling.DirectionalPayloadHandler;
 import net.neoforged.neoforge.network.handling.IPayloadHandler;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import org.slf4j.Logger;
@@ -75,30 +74,11 @@ public class PayloadReg<T extends CustomPacketPayload> extends Reg<PayloadReg<T>
 
             StreamCodec<FriendlyByteBuf, T> codec = this.codec.get();
 
-            if(serverHandler != null && clientHandler != null) {
-                switch (stage) {
-                    case PLAY -> registrar.playBidirectional(this.entry, codec, new DirectionalPayloadHandler<>(clientHandler, serverHandler));
-                    case CONFIGURATION -> registrar.configurationBidirectional(this.entry, codec, new DirectionalPayloadHandler<>(clientHandler, serverHandler));
-                    case COMMON -> registrar.commonBidirectional(this.entry, codec, new DirectionalPayloadHandler<>(clientHandler, serverHandler));
-                    default -> throw new IllegalStateException("Unexpected value: " + stage);
-                }
-            } else if(serverHandler != null) {
-                switch (stage) {
-                    case PLAY -> registrar.playToServer(this.entry, codec, serverHandler);
-                    case CONFIGURATION -> registrar.configurationToServer(this.entry, codec, serverHandler);
-                    case COMMON -> registrar.commonToServer(this.entry, codec, serverHandler);
-                    default -> throw new IllegalStateException("Unexpected value: " + stage);
-                }
-            } else if(clientHandler != null) {
-                switch (stage) {
-                    case PLAY -> registrar.playToClient(this.entry, codec, clientHandler);
-                    case CONFIGURATION -> registrar.configurationToClient(this.entry, codec, clientHandler);
-                    case COMMON -> registrar.commonToClient(this.entry, codec, clientHandler);
-                    default -> throw new IllegalStateException("Unexpected value: " + stage);
-                }
-            } else {
+            if (serverHandler == null && clientHandler == null) {
                 LOGGER.warn("No handlers for payload {}, skipping registration", this.name);
+                return;
             }
+            PayloadPlatform.register(registrar, stage, this.entry, codec, serverHandler, clientHandler);
         });
     }
 

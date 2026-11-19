@@ -44,7 +44,7 @@ public class EntityRendererReg<E extends Entity> extends Reg<EntityRendererReg<E
     @Override
     public void register(RegisterContext<?> context) {
         super.register(context);
-        context.onStage(RegistrationStage.BAKING_COMPLETE, (ctx)->{
+        context.onStage(RegistrationStage.REGISTER_RENDERERS, (ctx)->{
             Collection<EntityType<?>> validEntities = RegFacade.transformObject("EntityTypes", new HashSet<>());
             for (EntityType<?> validEntity : validEntities) {
                 //noinspection unchecked

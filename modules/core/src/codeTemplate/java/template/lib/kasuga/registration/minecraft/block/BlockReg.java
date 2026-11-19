@@ -9,6 +9,7 @@ import lib.kasuga.registration.core.Modifier;
 import lib.kasuga.registration.core.ModifierType;
 import lib.kasuga.registration.core.ScopeHelper;
 import lib.kasuga.registration.minecraft.common.MinecraftDeferRegistryReg;
+import lib.kasuga.registration.minecraft.common.RegistrationPlatform;
 import template.lib.kasuga.registration.minecraft.block_entity.BlockEntityReg;
 import template.lib.kasuga.registration.minecraft.item.ItemReg;
 import net.minecraft.core.registries.Registries;
@@ -86,7 +87,7 @@ public class BlockReg<T extends Block> extends MinecraftDeferRegistryReg<BlockRe
     protected T createObject(ResourceLocation id) {
         BlockBehaviour.Properties properties = RegFacade.transformObject("BlockProperties", BlockBehaviour.Properties.of());
         properties = this.applyProperties(BlockBehaviour.Properties.class, properties);
-        return supplier.apply(this).apply(properties);
+        return supplier.apply(this).apply(RegistrationPlatform.blockProperties(id, properties));
     }
 
 //    @RegGenerator.ChildrenConfiguration()

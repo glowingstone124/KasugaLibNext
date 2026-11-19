@@ -6,8 +6,8 @@ import lib.kasuga.internal.generator.annotations.RegGenerator;
 import lib.kasuga.internal.generator.facades.RegFacade;
 import lib.kasuga.registration.core.RegisterContext;
 import lib.kasuga.registration.minecraft.common.MinecraftDeferRegistryReg;
+import lib.kasuga.registration.minecraft.common.RegistrationPlatform;
 import lib.kasuga.registration.stages.RegistrationStage;
-import net.minecraft.client.renderer.item.ItemProperties;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -95,7 +95,7 @@ public final class ItemReg<T extends Item> extends MinecraftDeferRegistryReg<Ite
         }
         properties = RegFacade.transformObject("ItemPropertyModifiers", properties);
         properties = this.applyProperties(Item.Properties.class, properties);
-        return supplier.apply(this).apply(properties);
+        return supplier.apply(this).apply(RegistrationPlatform.itemProperties(id, properties));
     }
 
     @RegGenerator.ModifyFunction(type = "IsFoodModifier")

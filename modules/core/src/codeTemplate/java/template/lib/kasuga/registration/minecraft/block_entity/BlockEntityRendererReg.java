@@ -44,7 +44,7 @@ public class BlockEntityRendererReg<B extends BlockEntity> extends Reg<BlockEnti
     @Override
     public void register(RegisterContext<?> context) {
         super.register(context);
-        context.onStage(RegistrationStage.BAKING_COMPLETE, (ctx)->{
+        context.onStage(RegistrationStage.REGISTER_RENDERERS, (ctx)->{
             Collection<BlockEntityType<?>> validBlockEntities = RegFacade.transformObject("BlockEntities", new HashSet<>());
             for (BlockEntityType<?> validBlockEntity : validBlockEntities) {
                 //noinspection unchecked

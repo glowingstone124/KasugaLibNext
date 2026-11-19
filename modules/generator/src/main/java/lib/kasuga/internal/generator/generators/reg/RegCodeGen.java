@@ -554,7 +554,7 @@ public class RegCodeGen implements CodeGenerator {
         if(methodDeclaration.getParameters().isNonEmpty()) {
             if(methodDeclaration.getParameters().size() > 2)
                 throw new RuntimeException("Too much arguments for " + methodDeclaration.getNameAsString() + "in" + type + "!");
-            modifierUnit.addImport("net.minecraft.Util");
+            modifierUnit.addImport("lib.kasuga.registration.core.ModifierType");
             NodeList<Parameter> parameters = new NodeList<>(methodDeclaration.getParameters());
             NodeList<Type> parameterTypes = new NodeList<>();
 
@@ -585,7 +585,7 @@ public class RegCodeGen implements CodeGenerator {
             modifierUnit.addImport(methodDeclaration.getParameters().size() == 1 ? Function.class.getName() : BiFunction.class.getName());
 
             newMethodExpr = new MethodCallExpr(
-                    new NameExpr("Util"),
+                    new NameExpr("ModifierType"),
                     "memoize",
                     NodeList.nodeList(new LambdaExpr(parameters, newMethodExpr))
             );

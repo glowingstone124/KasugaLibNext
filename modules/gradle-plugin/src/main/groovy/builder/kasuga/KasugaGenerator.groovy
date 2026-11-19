@@ -7,14 +7,17 @@ import org.gradle.api.tasks.JavaExec
 import org.gradle.api.provider.Provider
 
 public class KasugaGenerator {
-    public static void useGenerator(Project project) {
+    public static void useGenerator(Project project, Map options = [:]) {
+        Object templateDirectory = options.getOrDefault('templates', 'src/codeTemplate/java')
+        List<?> preparationTasks = options.getOrDefault('dependsOn', [])
+        List<File> variantSources = options.getOrDefault('sources', []).collect { project.file(it) }
         project.configurations {
             codeGenDependency
         }
         project.sourceSets {
             codeTemplate {
                 java {
-                    srcDir 'src/codeTemplate/java'
+                    setSrcDirs([templateDirectory])
                 }
                 resources {
                     srcDir 'src/codeTemplate/resources'
@@ -47,13 +50,14 @@ public class KasugaGenerator {
 
             inputs.files(project.sourceSets.codeTemplate.allSource)
                     .withPropertyName("sources");
+            inputs.files(variantSources).withPropertyName('variantSources')
+            dependsOn(preparationTasks)
 
             outputs.dir("$project.buildDir/generated/sources/codegen/java/main")
 
             classpath = project.configurations.codeGenDependency
             mainClass = 'lib.kasuga.internal.generator.KasugaCodeGen'
             Provider<Set<FileSystemLocation>> provider = project.sourceSets.main.runtimeClasspath.getElements()
-            Provider<Set<FileSystemLocation>> mainSource = project.sourceSets.main.output.getElements()
             def codeTemplateSrcDir = project.sourceSets.codeTemplate.java.srcDirs.first().absolutePath
             def generatedDir = "$project.buildDir/generated/sources/codegen/java/main"
             def buildDirPath = project.buildDir.absolutePath
@@ -62,7 +66,7 @@ public class KasugaGenerator {
             args(codeTemplateSrcDir)
             args(generatedDir)
             doFirst{
-                def allClasspath = mainSrcDirs.collect { it.absolutePath } + provider.get().asFile*.absolutePath
+                def allClasspath = (mainSrcDirs + variantSources)*.absolutePath + provider.get().asFile*.absolutePath
                 if (utilsArtifactsDir != null && utilsArtifactsDir.exists()) {
                     utilsArtifactsDir.eachFile { f ->
                         if (f.name.endsWith('.jar') && !f.name.endsWith('-sources.jar')) {

@@ -25,6 +25,52 @@ sourceSets.main.java.srcDir(rootProject.file('modules/modelling/src/shared/java'
 sourceSets.main.resources.srcDir(rootProject.file('modules/modelling/src/sharedResources'))
 sourceSets.test.java.srcDir(rootProject.file('modules/core/src/sharedTest/java'))
 
+// Sync the shared registration sources with the names used by the 26.3 mappings.
+// Behavioral API changes are handled in the handwritten platform adapters.
+def registrationDirectory = layout.buildDirectory.dir('generated/sources/registration/java')
+def templateDirectory = layout.buildDirectory.dir('generated/sources/registration/templates')
+def updateMinecraftNames = { String line ->
+    line.replaceAll(/\bResourceLocation\b/, 'Identifier')
+            .replace('net.minecraft.Util', 'net.minecraft.util.Util')
+            .replace('.location()', '.identifier()')
+            .replaceAll(/\bnoCollission\b/, 'noCollision')
+            .replaceAll(/\bsetNoRepair\b/, 'setNoCombineRepair')
+}
+def prepareRegistrationSources = tasks.register('prepareRegistrationSources', Sync) {
+    from(rootProject.file('modules/core/src/main/java')) {
+        include 'lib/kasuga/KasugaLibRegistry.java',
+                'lib/kasuga/registration/**',
+                'lib/kasuga/content/graph/GraphCycleDetector.java'
+        exclude 'lib/kasuga/registration/kasuga/**',
+                'lib/kasuga/registration/beans/rendering/**',
+                'lib/kasuga/registration/core/DefaultClientRegisterContextDispatchers.java',
+                'lib/kasuga/registration/minecraft/common/DeferredFillHolder.java',
+                'lib/kasuga/registration/minecraft/common/RegistrationPlatform.java',
+                'lib/kasuga/registration/minecraft/fluid/ManagedFluidClientExtensions.java',
+                'lib/kasuga/registration/minecraft/payload/PayloadPlatform.java',
+                'lib/kasuga/registration/minecraft/entity/EntityRendererBuilder.java',
+                'lib/kasuga/registration/minecraft/block_entity/BlockEntityRendererBuilder.java'
+    }
+    from(rootProject.file('modules/data-driven/src/main/java')) {
+        exclude 'lib/kasuga/registration/data_driven/builder/RegistrationResources.java',
+                'lib/kasuga/registration/data_driven/diagnostics/DiagnosticPermissions.java'
+    }
+    filter(updateMinecraftNames)
+    into(registrationDirectory)
+}
+def prepareRegistrationTemplates = tasks.register('prepareRegistrationTemplates', Sync) {
+    from(rootProject.file('modules/core/src/codeTemplate/java')) {
+        include 'template/lib/kasuga/registration/minecraft/**'
+    }
+    filter(updateMinecraftNames)
+    into(templateDirectory)
+}
+sourceSets.main.java.srcDir(prepareRegistrationSources)
+sourceSets.main.java.srcDir(layout.buildDirectory.dir('generated/sources/codegen/java/main'))
+useGenerator(templates: templateDirectory, sources: [registrationDirectory],
+        dependsOn: [prepareRegistrationSources, prepareRegistrationTemplates])
+tasks.named('sourcesJar') { dependsOn 'runGenerator' }
+
 tasks.named('test') { useJUnitPlatform() }
 
 sourceSets {
@@ -38,6 +84,10 @@ tasks.named('processContentTestingResources', ProcessResources) {
     from(rootProject.file('modules/modelling/src/contentTesting/resources')) {
         include 'assets/kasuga_lib/models/components/light_locator.bbmodel',
                 'assets/kasuga_lib/models/components/emitter_smoke.bbmodel'
+    }
+    from(rootProject.file('modules/core/src/contentTesting/resources')) {
+        include 'assets/kasuga_lib/textures/block/test_fluid_still.png',
+                'assets/kasuga_lib/textures/block/test_fluid_flow.png'
     }
 }
 
@@ -104,7 +154,9 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet sourceSets.main
-            sourceSet sourceSets.contentTesting
+            if (!providers.gradleProperty('kasugaGraphicsSmoke').getOrElse('').isEmpty()) {
+                sourceSet sourceSets.contentTesting
+            }
         }
     }
 }

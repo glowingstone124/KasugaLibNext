@@ -5,6 +5,7 @@ import lib.kasuga.internal.generator.annotations.RegGenerator;
 import lib.kasuga.internal.generator.facades.RegFacade;
 import lib.kasuga.registration.core.Modifier;
 import lib.kasuga.registration.minecraft.common.MinecraftDeferRegistryReg;
+import lib.kasuga.registration.minecraft.common.RegistrationPlatform;
 import lib.kasuga.registration.minecraft.entity.EntityRendererBuilder;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -79,7 +80,7 @@ public final class EntityReg<T extends Entity> extends MinecraftDeferRegistryReg
         }
 
         //noinspection unchecked
-        return (EntityType<T>) RegFacade.transformObject("EntityBuilder", builder).build(id.toString());
+        return (EntityType<T>) RegistrationPlatform.entityType(id, RegFacade.transformObject("EntityBuilder", builder));
     }
 
     @RegGenerator.ModifyFunction(type = "Width")

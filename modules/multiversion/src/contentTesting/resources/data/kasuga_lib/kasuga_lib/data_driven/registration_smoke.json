@@ -1,0 +1,4 @@
+{
+  "on_register": ["registration_smoke/blocks.json"],
+  "on_reload": ["registration_smoke/reload.json"]
+}
