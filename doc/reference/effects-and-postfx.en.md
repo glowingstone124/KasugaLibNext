@@ -1,5 +1,11 @@
 # Managed Effects and Post-Processing
 
+## Black-hole demo
+
+In the development client, `/kasuga_black_hole demo` puts a black hole in front of the player. Try `orbit` for three moving lenses or `massive` for a larger disk. Use `clear` to remove the demo and `status` to check whether it is active.
+
+The demo uses a bounded Schwarzschild ray solver, an animated thin disk, and the Minecraft world color and depth buffers. It draws only within the projected lens bounds and skips rays that miss the lens or hit foreground geometry. The 26.3 version runs on both RenderPearl backends. The 1.21.1 version uses the legacy OpenGL post-process graph.
+
 ## Transformable Particle Instances and Group Control
 
 Particles and managed effects use different lifecycle models:

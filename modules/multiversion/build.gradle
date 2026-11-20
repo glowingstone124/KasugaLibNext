@@ -121,9 +121,28 @@ tasks.named('sourcesJar') { dependsOn 'runGenerator' }
 tasks.named('test') { useJUnitPlatform() }
 
 sourceSets {
-    contentTesting {
+    blackHoleDemo {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+    contentTesting {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + sourceSets.blackHoleDemo.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath + sourceSets.blackHoleDemo.output
+    }
+}
+
+def prepareBlackHoleDemoSources = tasks.register('prepareBlackHoleDemoSources', Sync) {
+    from(rootProject.file('modules/modelling/src/contentTesting/java')) {
+        include 'test/kasuga/modelling/demo/blackhole/BlackHoleDemo.java',
+                'test/kasuga/modelling/demo/blackhole/LensView.java'
+    }
+    into layout.buildDirectory.dir('generated/sources/blackHoleDemo/java')
+}
+sourceSets.blackHoleDemo.java.srcDir(prepareBlackHoleDemoSources)
+
+tasks.named('processBlackHoleDemoResources', ProcessResources) {
+    from(rootProject.file('modules/modelling/src/contentTesting/resources')) {
+        include 'assets/kasuga_lib/shaders/include/black_hole_demo.glsl'
     }
 }
 
@@ -205,6 +224,7 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet sourceSets.main
+            sourceSet sourceSets.blackHoleDemo
             if (!providers.gradleProperty('kasugaGraphicsSmoke').getOrElse('').isEmpty()) {
                 sourceSet sourceSets.contentTesting
             }
