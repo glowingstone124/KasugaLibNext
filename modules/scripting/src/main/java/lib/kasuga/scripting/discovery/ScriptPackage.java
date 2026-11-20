@@ -11,8 +11,7 @@ import lib.kasuga.scripting.module.ResolvedScript;
 import lib.kasuga.core.resource.identity.ResourceUri;
 import lib.kasuga.core.resource.lifecycle.LogicalSide;
 import lib.kasuga.scripting.resource.ScriptBlockRegistry;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.fml.loading.FMLEnvironment;
+import lib.kasuga.inject.Envs;
 import org.slf4j.Logger;
 
 import java.io.InputStream;
@@ -124,14 +123,12 @@ public class ScriptPackage {
             try { session.install(); } catch (RuntimeException error) { failed.set(true); session.failPreparation(error); }
         });
 
-        // Physical-side filtering: common entries run on both sides; server entries only on a dedicated
-        // server, client entries only on the client. Without this, a server entry would also run in the
-        // client engine (and vice versa). (For integrated-server logic that must run on a physical client
-        // too, use a common entry.)
+        // Managed packages use their resource scope's logical side. Legacy packages use the physical side.
+        LogicalSide side = managed != null ? managed.side() : legacySide();
         List<String> entriesToRun = new ArrayList<>(resolved.info().entry().common());
-        if (managed != null && managed.side() == LogicalSide.SERVER || managed == null && FMLEnvironment.dist == Dist.DEDICATED_SERVER) {
+        if (side == LogicalSide.SERVER) {
             entriesToRun.addAll(resolved.info().entry().server());
-        } else if (managed != null && managed.side() == LogicalSide.CLIENT || managed == null && FMLEnvironment.dist == Dist.CLIENT) {
+        } else if (side == LogicalSide.CLIENT) {
             entriesToRun.addAll(resolved.info().entry().client());
         }
         for (String entry : entriesToRun) {
@@ -149,6 +146,12 @@ public class ScriptPackage {
             if (!child.isRunnable()) continue;
             child.startInternal(threadGroup, managed);
         }
+    }
+
+    private static LogicalSide legacySide() {
+        if (Envs.isDedicatedServer()) return LogicalSide.SERVER;
+        if (Envs.isClient()) return LogicalSide.CLIENT;
+        return LogicalSide.NONE;
     }
 
     private boolean executeEntry(ScriptEngine engine, String entryName) {

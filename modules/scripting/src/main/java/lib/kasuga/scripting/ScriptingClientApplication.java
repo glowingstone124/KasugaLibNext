@@ -4,13 +4,12 @@ import io.micronaut.context.annotation.Context;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
-import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
 import lib.kasuga.inject.class_loader.BeanOnlyIn;
 import lib.kasuga.scripting.client.ScriptEngineErrorScreen;
 import lib.kasuga.scripting.client.ScriptEngineMissingScreen;
-import lib.kasuga.scripting.discovery.PackageSystem;
 import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 import java.util.Set;
 
@@ -22,29 +21,25 @@ public class ScriptingClientApplication {
     IEventBus eventBus;
 
     @Inject()
-    PackageSystem packageSystem;
+    ScriptingSystem scriptingSystem;
 
     @PostConstruct()
     public void init() {
-        eventBus.addListener(this::onResourceReloadFinished);
+        eventBus.addListener(this::onClientTick);
     }
 
-    private void onResourceReloadFinished(ClientResourceReloadFinishEvent event) {
+    private void onClientTick(ClientTickEvent.Pre event) {
+        scriptingSystem.tickClient();
+        scriptingSystem.reportEngineDiagnostics(null, this::showEngineDiagnostics);
+    }
 
-        Set<String> missingEngines = packageSystem.getMissingEngines();
-
-        if(!missingEngines.isEmpty()) {
-            Minecraft.getInstance().setScreen(new ScriptEngineMissingScreen(
-                    missingEngines,
-                    Minecraft.getInstance().screen
-            ));
+    private void showEngineDiagnostics(ScriptRuntime.EngineDiagnostics diagnostics) {
+        Set<String> missingEngines = diagnostics.missing();
+        if (!missingEngines.isEmpty()) {
+            Minecraft.getInstance().setScreen(new ScriptEngineMissingScreen(missingEngines, Minecraft.getInstance().screen));
         }
-
-        if(!packageSystem.getEngineErrors().isEmpty()) {
-            Minecraft.getInstance().setScreen(new ScriptEngineErrorScreen(
-                    packageSystem.getEngineErrors(),
-                    Minecraft.getInstance().screen
-            ));
+        if (!diagnostics.failures().isEmpty()) {
+            Minecraft.getInstance().setScreen(new ScriptEngineErrorScreen(diagnostics.failures(), Minecraft.getInstance().screen));
         }
     }
 }

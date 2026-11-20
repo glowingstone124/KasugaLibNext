@@ -16,6 +16,8 @@ import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -25,8 +27,11 @@ public class ScriptRuntime implements ScopedResourcePackListener {
     private volatile ScriptThreadGroup rootThreadGroup;
     private ScriptPackage rootPackage;
     private long reloadSequence;
+    private EngineDiagnostics pendingDiagnostics;
     private boolean closed;
     private CompletableFuture<Void> reloadTail = CompletableFuture.completedFuture(null);
+
+    record EngineDiagnostics(Set<String> missing, Map<String, List<Throwable>> failures) {}
 
     @Inject()
     PackageSystem packageSystem;
@@ -40,7 +45,13 @@ public class ScriptRuntime implements ScopedResourcePackListener {
 
     public void close() {
         ScriptThreadGroup old;
-        synchronized (this) { closed = true; reloadSequence++; old = rootThreadGroup; rootThreadGroup = null; }
+        synchronized (this) {
+            closed = true;
+            reloadSequence++;
+            pendingDiagnostics = null;
+            old = rootThreadGroup;
+            rootThreadGroup = null;
+        }
         if (old != null) old.shutdown();
     }
 
@@ -51,6 +62,7 @@ public class ScriptRuntime implements ScopedResourcePackListener {
         synchronized (this) {
             if (closed) return;
             long requested = ++reloadSequence;
+            pendingDiagnostics = null;
             ScriptThreadGroup old = rootThreadGroup; rootThreadGroup = null;
             CompletableFuture<Void> stopped = old == null ? CompletableFuture.completedFuture(null) : old.shutdown();
             // Serialize scans too: a superseded scan must not clear a newer scan's package registry.
@@ -95,9 +107,18 @@ public class ScriptRuntime implements ScopedResourcePackListener {
             }
         }
 
+        Set<String> missing = packageSystem.getMissingEngines();
+        Map<String, List<Throwable>> failures = Map.copyOf(packageSystem.getEngineErrors());
         synchronized (this) {
-            if (closed || reloadSequence != requested) { newGroup.shutdown(); return; }
-            rootPackage = newPackage; rootThreadGroup = newGroup;
+            if (closed || reloadSequence != requested) {
+                newGroup.shutdown();
+                return;
+            }
+            if (!missing.isEmpty() || !failures.isEmpty()) {
+                pendingDiagnostics = new EngineDiagnostics(missing, failures);
+            }
+            rootPackage = newPackage;
+            rootThreadGroup = newGroup;
         }
         try { newPackage.start(newGroup); }
         catch (RuntimeException failure) {
@@ -123,6 +144,12 @@ public class ScriptRuntime implements ScopedResourcePackListener {
         }
 
         root.addChild(candidate);
+    }
+
+    synchronized EngineDiagnostics takeEngineDiagnostics() {
+        EngineDiagnostics diagnostics = pendingDiagnostics;
+        pendingDiagnostics = null;
+        return diagnostics;
     }
 
     public void tick() {

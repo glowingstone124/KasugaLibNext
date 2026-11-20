@@ -31,7 +31,7 @@ public final class GuiPreviewSmoke {
     private GuiPreviewSmoke() {}
 
     public static void start(Minecraft client) {
-        screen = new PreviewScreen();
+        screen = new PreviewScreen(Identifier.parse("kasuga_lib:models/smoke/native_java.json"));
         client.gui.setScreen(screen);
     }
 
@@ -69,7 +69,7 @@ public final class GuiPreviewSmoke {
     private static void evaluate(Minecraft client, Phase sampled, Pixels pixels, Path file) {
         LOGGER.info("KASUGA_GUI_PREVIEW_CAPTURE phase={} jade={} magenta={} cyan={} clipped={} file={}",
                 sampled, pixels.jade(), pixels.magenta(), pixels.cyan(), pixels.clipped(), file);
-        if (pixels.jade() < 700 || pixels.magenta() < 300 || pixels.cyan() < 400) {
+        if (pixels.magenta() < 300 || pixels.cyan() < 400 || (sampled != Phase.MMD && pixels.jade() < 700)) {
             throw new IllegalStateException("Both GUI model previews must appear in " + file);
         }
         ModelInstance left = screen.left.preview().instance();
@@ -107,6 +107,15 @@ public final class GuiPreviewSmoke {
                     throw new IllegalStateException("Removing the screen did not close its previews");
                 }
                 LOGGER.info("KASUGA_GUI_PREVIEW_PASS two-panels,depth-canvas,camera,resize,scissor,reload,closed");
+                phase = Phase.MMD;
+                screen = new PreviewScreen(Identifier.parse("kasuga_lib:models/smoke/mmd/sample.pmx"));
+                client.gui.setScreen(screen);
+                capturing = false;
+            }
+            case MMD -> {
+                client.gui.setScreen(null);
+                if (!left.isClosed()) throw new IllegalStateException("Removing the screen kept the MMD preview alive");
+                LOGGER.info("KASUGA_MMD_GUI_PASS pmx,diffuse,closed");
                 StructurePreviewSmoke.start(client);
             }
         }
@@ -139,17 +148,17 @@ public final class GuiPreviewSmoke {
     }
 
     private record Pixels(int jade, int magenta, int cyan, int clipped) {}
-    private enum Phase { INITIAL, RESIZED, RELOADED }
+    private enum Phase { INITIAL, RESIZED, RELOADED, MMD }
 
     private static final class PreviewScreen extends Screen {
-        private final ModelPreviewWidget left = new ModelPreviewWidget(0, 0, 1, 1,
-                new GuiModelPreview(Identifier.parse("kasuga_lib:models/smoke/native_java.json"), null));
+        private final ModelPreviewWidget left;
         private final ModelPreviewWidget right = new ModelPreviewWidget(0, 0, 1, 1,
                 new GuiModelPreview(Identifier.parse("kasuga_lib:models/smoke/animated_triangle.gltf"), null));
         private boolean clipped;
 
-        private PreviewScreen() {
+        private PreviewScreen(Identifier leftResource) {
             super(Component.literal("Model preview smoke"));
+            left = new ModelPreviewWidget(0, 0, 1, 1, new GuiModelPreview(leftResource, null));
         }
 
         @Override protected void init() {

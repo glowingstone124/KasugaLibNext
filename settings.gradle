@@ -31,6 +31,8 @@ include ':modules:generator'
 
 if (minecraftTarget == '26.3') {
     include ':modules:multiversion'
+    include ':external:slp:javet'
+    project(':external:slp:javet').buildFileName = 'build.26.3.gradle'
 } else {
     include ':modules:render-opengl'
     include ':modules:core'

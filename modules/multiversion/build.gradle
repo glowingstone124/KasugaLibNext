@@ -127,6 +127,24 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
     }
     into(layout.buildDirectory.dir('generated/sources/models/java'))
 }
+def prepareScriptingSources = tasks.register('prepareScriptingSources', Sync) {
+    from(rootProject.file('modules/scripting/src/main/java')) {
+        exclude 'lib/kasuga/scripting/client/**'
+    }
+    filter { String line ->
+        updateMinecraftNames(line).replace('Minecraft.getInstance().setScreen(', 'Minecraft.getInstance().gui.setScreen(')
+                .replace('Minecraft.getInstance().screen', 'Minecraft.getInstance().gui.screen()')
+    }
+    into(layout.buildDirectory.dir('generated/sources/scripting/java'))
+}
+def prepareScriptingTests = tasks.register('prepareScriptingTests', Sync) {
+    from(rootProject.file('modules/scripting/src/test/java')) {
+        include 'lib/kasuga/test/scripting/fsm/**', 'lib/kasuga/test/scripting/ticket/**'
+    }
+    into(layout.buildDirectory.dir('generated/sources/scripting/test'))
+}
+sourceSets.test.java.srcDir(prepareScriptingTests)
+sourceSets.main.java.srcDir(prepareScriptingSources)
 sourceSets.main.java.srcDir(prepareModelSources)
 sourceSets.main.java.srcDir(prepareRegistrationSources)
 sourceSets.main.java.srcDir(layout.buildDirectory.dir('generated/sources/codegen/java/main'))
@@ -180,8 +198,6 @@ configurations {
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testRuntimeOnly 'org.slf4j:slf4j-api:2.0.17'
-    testRuntimeOnly 'com.google.code.gson:gson:2.14.0'
 
     api(project(':modules:inject')) { transitive = false }
     bundledLibrary(project(':modules:inject')) { transitive = false }
@@ -245,6 +261,11 @@ neoForge {
                 sourceSet sourceSets.contentTesting
             }
         }
+    }
+
+    unitTest {
+        enable()
+        testedMod = mods."${mod_id}"
     }
 }
 

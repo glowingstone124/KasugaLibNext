@@ -1,0 +1,5 @@
+name = "kasuga-smoke"
+engine = "smoke"
+
+[entry]
+client = "client"

@@ -13,8 +13,8 @@
 模型资源。压缩包默认按规范化路径排序并选择第一个模型。可用 `KsgPmxLoader.openArchive(archiveId, entryName)`
 指定包内模型。压缩包旁的 `.mmd.json` 支持 `encoding` 和 `model_scale`。
 
-Vulkan 和 OpenGL 共用 RenderPearl 渲染器以及库内骨骼、变形和姿势管线。当前适配器支持漫反射纹理与材质 Alpha。
-Toon、球面贴图和 PBR 纹理处理仍待移植。以下章节介绍 1.21.1。
+Vulkan 和 OpenGL 共用 RenderPearl 渲染器以及库内骨骼、变形和姿势管线。世界渲染和 GUI 预览支持漫反射纹理与材质 Alpha。
+从 PMX 参数生成的 LabPBR 图集限于 1.21.1 的渲染路径。PMX 材质的 Toon 纹理和球面贴图属于已解析的元数据。下文介绍 1.21.1。
 
 ## 前置条件
 

@@ -145,7 +145,11 @@ See the [26.3 world render callback reference](doc/reference/effect-rendering.en
 Fullscreen Shader DSL programs compile through RenderPearl and use std140 uniforms.
 See the [26.3 fullscreen shader reference](doc/reference/shader-dsl.en.md#minecraft-263-fullscreen-shaders).
 World-space black-hole lenses use the same shader path and respect world depth.
-Other custom rendering APIs are being ported.
+The development command `/kasuga_black_hole demo` opens the bounded ray-traced demo.
+The 26.3 core includes the scripting API, package discovery, engine registry, and resource
+reload lifecycle. To run JavaScript, build `./gradlew -PkasugaMinecraft=26.3 :external:slp:javet:assemble`
+and install the Javet `-all.jar` from `external/slp/javet/build/26.3/libs` alongside KasugaLib's `-all.jar`.
+The Javet jar bundles V8 for Windows x86-64 and macOS and Linux on x86-64 or ARM64.
 Integration modules whose upstream mods still target earlier Minecraft releases
 stay in the 1.21.1 build.
 
@@ -161,11 +165,11 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`,
 `KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
 `KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, `KASUGA_RPC_PASS`,
-`KASUGA_NATIVE_JSON_PASS`, `KASUGA_MMD_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
+`KASUGA_NATIVE_JSON_PASS`, `KASUGA_MMD_PASS`, `KASUGA_MMD_GUI_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
 `KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_PIPELINE_PASS`, `KASUGA_POST_GRAPH_PASS`,
 `KASUGA_SHADER_DSL_PASS`, `KASUGA_BLACK_HOLE_PASS`, `KASUGA_WORLD_UI_PASS`,
 `KASUGA_FRAME_OUTPUT_PASS`, `KASUGA_FRAME_WINDOW_PASS`, `KASUGA_PLAYER_CAMERA_PASS`,
-`KASUGA_DETACHED_CAMERA_PASS`, `KASUGA_REMOTE_CAMERA_PASS`, and `KASUGA_CAMERA_HISTORY_PASS`.
+`KASUGA_DETACHED_CAMERA_PASS`, `KASUGA_REMOTE_CAMERA_PASS`, `KASUGA_CAMERA_HISTORY_PASS`, and `KASUGA_SCRIPTING_PASS`.
 Captures of the models, animation, lighting, held documents, and GUI previews
 are saved in the test game directory.
 

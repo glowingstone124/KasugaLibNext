@@ -1,0 +1,85 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev'
+    id 'com.gradleup.shadow' version '9.0.2'
+}
+
+group = mod_group_id
+version = "${mod_version}+mc26.3"
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+repositories {
+    mavenCentral()
+}
+
+neoForge.version = project.neo_version_26_3
+
+// This target packages the V8 libraries with the mod so startup needs no downloader.
+Map<String, String> minecraftNames = [
+        'ResourceLocation': 'Identifier',
+        '.tell(': '.execute(',
+        'player.displayClientMessage(Component.literal(text), true);':
+                'Minecraft.getInstance().gui.hud.setOverlayMessage(Component.literal(text), false);',
+        'import com.caoccao.javet.interop.loader.JavetLibLoader;': '',
+        'import lib.kasuga.slp.javet.downloader.JavetDownloader;': '',
+        'protected static JavetDownloader javetDownloader = new JavetDownloader();': '',
+        'JavetLibLoader.setLibLoadingListener(javetDownloader);': ''
+]
+def prepareJavetSources = tasks.register('prepareJavetSources', Sync) {
+    inputs.property('minecraftNames', minecraftNames)
+    from('src/main/java') {
+        exclude 'lib/kasuga/slp/javet/downloader/**'
+    }
+    filter { String line ->
+        for (Map.Entry<String, String> replacement : minecraftNames.entrySet()) {
+            line = line.replace(replacement.key, replacement.value)
+        }
+        line
+    }
+    into layout.buildDirectory.dir('generated/sources/javet/java')
+}
+sourceSets.main.java.setSrcDirs([prepareJavetSources])
+sourceSets.main.resources.exclude('scripts/**', '**/fsmscriptinggametest.empty.nbt')
+
+configurations {
+    bundledEngine
+}
+
+dependencies {
+    compileOnly(project(':modules:multiversion')) { transitive = false }
+    compileOnly 'jakarta.annotation:jakarta.annotation-api:2.1.1'
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
+
+    implementation 'com.caoccao.javet:javet:5.0.1'
+    bundledEngine('com.caoccao.javet:javet:5.0.1') { transitive = false }
+    for (String platform : ['windows-x86_64', 'linux-x86_64', 'linux-arm64', 'macos-x86_64', 'macos-arm64']) {
+        bundledEngine("com.caoccao.javet:javet-v8-${platform}:5.0.1") { transitive = false }
+    }
+}
+
+def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    Map properties = [
+            minecraft_version      : '26.3',
+            minecraft_version_range: '[26.3]',
+            neo_version            : neo_version_26_3,
+            loader_version_range   : loader_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : project.version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
+            kasuga_lib_version_range: kasuga_lib_version_range
+    ]
+    inputs.properties properties
+    expand properties
+    from 'src/main/templates'
+    into layout.buildDirectory.dir('generated/sources/modMetadata')
+}
+sourceSets.main.resources.srcDir generateModMetadata
+
+shadowJar {
+    configurations = [project.configurations.bundledEngine]
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class', 'META-INF/versions/*/module-info.class'
+}

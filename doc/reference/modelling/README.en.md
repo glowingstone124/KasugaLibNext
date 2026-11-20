@@ -16,8 +16,9 @@ first model in normalized path order. Use `KsgPmxLoader.openArchive(archiveId, e
 an entry. The adjacent `.mmd.json` accepts `encoding` and `model_scale`.
 
 Vulkan and OpenGL share the RenderPearl renderer and the library's skeleton, morph, and pose
-pipeline. This adapter currently renders diffuse textures and material alpha. The legacy toon,
-sphere-map, and PBR texture treatments are pending. The following sections describe 1.21.1.
+pipeline. World rendering and GUI previews use diffuse textures and material alpha.
+The 1.21.1 LabPBR atlas generated from PMX parameters is limited to the legacy rendering path.
+Per-material PMX toon textures and sphere maps are parsed metadata. The following sections describe 1.21.1.
 
 ## Prerequisites
 

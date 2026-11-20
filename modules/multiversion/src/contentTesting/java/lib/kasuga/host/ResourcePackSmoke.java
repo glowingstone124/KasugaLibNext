@@ -16,6 +16,7 @@ import lib.kasuga.core.resource.source.ResourceSourceDescriptor;
 import lib.kasuga.core.resource.source.ResourceSources;
 import lib.kasuga.core.vfs.VfsPath;
 import lib.kasuga.core.vfs.backend.InMemoryVfs;
+import lib.kasuga.scripting.ScriptEngineRegistry;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -59,17 +60,19 @@ public final class ResourcePackSmoke {
     private static final VfsPath DATA = VfsPath.of("data/" + FILE.getNamespace() + "/" + FILE.getPath());
     private final ResourceSystem resources;
     private final InMemoryVfs override = new InMemoryVfs("smoke_override");
+    private final ScriptLifecycleSmoke scripting;
     private int clientPublications;
     private int serverPublications;
     private boolean clientReloadRequested;
 
-    public ResourcePackSmoke(ResourceSystem resources) throws IOException {
+    public ResourcePackSmoke(ResourceSystem resources, ScriptEngineRegistry engines) throws IOException {
         this.resources = resources;
         InMemoryVfs base = new InMemoryVfs("smoke_base");
         base.writeString(ASSET, "base");
         base.writeString(DATA, "base");
         override.writeString(ASSET, "initial");
         override.writeString(DATA, "initial");
+        scripting = new ScriptLifecycleSmoke(engines);
         ResourceSource low = source("base", 1, base);
         ResourceSource high = source("override", 2, override);
         ResourceRouting plan = ResourceRouting.decode("""
@@ -87,8 +90,12 @@ public final class ResourcePackSmoke {
 
     public static boolean clientReady() throws IOException {
         ResourcePackSmoke smoke = KasugaLib.getBean(ResourcePackSmoke.class);
-        if (smoke.clientPublications >= 2) return true;
-        if (smoke.clientPublications == 1 && !smoke.clientReloadRequested) {
+        if (smoke.clientPublications >= 2) {
+            if (!smoke.scripting.replacementReady()) return false;
+            LOGGER.info("KASUGA_SCRIPTING_PASS pack-entry,client-tick,reload,retired-engine-close");
+            return true;
+        }
+        if (smoke.clientPublications == 1 && !smoke.clientReloadRequested && smoke.scripting.initialReady()) {
             smoke.clientReloadRequested = true;
             smoke.override.writeString(ASSET, "reloaded");
             Minecraft.getInstance().getResourcePackRepository().reload();

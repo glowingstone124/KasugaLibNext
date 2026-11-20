@@ -5,19 +5,13 @@ import io.micronaut.context.annotation.Context;
 import jakarta.annotation.PostConstruct;
 import jakarta.inject.Inject;
 import jakarta.inject.Named;
-import lib.kasuga.core.resource.ServerResourceReloadFinishEvent;
 import lib.kasuga.inject.auto_configure.Configurable;
 import lib.kasuga.inject.class_loader.BeanOnlyIn;
-import lib.kasuga.scripting.client.ScriptEngineErrorScreen;
-import lib.kasuga.scripting.client.ScriptEngineMissingScreen;
-import lib.kasuga.scripting.discovery.PackageSystem;
-import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.common.ModConfigSpec;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
-import org.spongepowered.asm.mixin.injection.struct.InjectorGroupInfo;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,7 +23,7 @@ public class ScriptingServerApplication implements Configurable {
     Logger logger = LogUtils.getLogger();
 
     @Inject()
-    PackageSystem packageSystem;
+    ScriptingSystem scriptingSystem;
 
 
     @Inject() @Named("forgeEventBus")
@@ -46,28 +40,28 @@ public class ScriptingServerApplication implements Configurable {
 
     @PostConstruct()
     public void init() {
-        eventBus.addListener(this::onResourceReloadFinished);
+        eventBus.addListener(this::onServerTick);
     }
 
-    private void onResourceReloadFinished(ServerResourceReloadFinishEvent serverResourceReloadFinishEvent) {
+    private void onServerTick(ServerTickEvent.Pre event) {
+        scriptingSystem.reportEngineDiagnostics(event.getServer(), this::reportEngineDiagnostics);
+    }
 
-        Set<String> missingEngines = packageSystem.getMissingEngines();
-
-        if(!missingEngines.isEmpty()) {
-            String missingEnginePrompt = "Missing scripting engine: " + String.join(", ", missingEngines) + ", please install them now!";
-
-            if(IGNORE_ERRORS.getAsBoolean()) {
-                logger.warn(missingEnginePrompt);
-            } else {
-                throw new RuntimeException(missingEnginePrompt);
-            }
+    private void reportEngineDiagnostics(ScriptRuntime.EngineDiagnostics diagnostics) {
+        for (Map.Entry<String, List<Throwable>> entry : diagnostics.failures().entrySet()) {
+            for (Throwable error : entry.getValue()) logger.error("Script engine {} failed", entry.getKey(), error);
+        }
+        if (!diagnostics.failures().isEmpty()) {
+            throw new IllegalStateException("Script engine startup failed: " + String.join(", ", diagnostics.failures().keySet()));
         }
 
-        if(!packageSystem.getEngineErrors().isEmpty()) {
-            for (Map.Entry<String, List<Throwable>> value : packageSystem.getEngineErrors().entrySet()) {
-                logger.error(value.toString());
-            }
-            throw new RuntimeException("Script Engine System Error Detected: " + String.join(", ", packageSystem.getEngineErrors().values().stream().flatMap(Collection::stream).map(Throwable::toString).toList()));
+        Set<String> missingEngines = diagnostics.missing();
+        if (missingEngines.isEmpty()) return;
+        String message = "Missing scripting engine: " + String.join(", ", missingEngines) + ", please install them now!";
+        if (IGNORE_ERRORS.getAsBoolean()) {
+            logger.warn(message);
+            return;
         }
+        throw new IllegalStateException(message);
     }
 }
