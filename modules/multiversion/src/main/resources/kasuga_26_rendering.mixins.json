@@ -18,7 +18,7 @@
     "FirstPersonRendererMixin",
     "FrontendGpuDeviceAccess",
     "GlDeviceWindowAccess",
-    "GuiCanvasMixin",
+    "GuiWindowStateAccess",
     "MinecraftFrameOutputMixin",
     "WorldUiGameRendererMixin",
     "WorldUiKeyboardMixin",

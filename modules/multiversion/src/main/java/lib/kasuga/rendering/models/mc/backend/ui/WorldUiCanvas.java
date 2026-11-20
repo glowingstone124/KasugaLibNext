@@ -74,7 +74,7 @@ final class WorldUiCanvas implements AutoCloseable {
 
         Painter(GameRenderer game) {
             renderer = new GuiRenderer(state, game.featureRenderDispatcher(),
-                    ((GuiCanvasAccess.Factory) game).kasuga$pictureInPictureFactories());
+                    ((GuiCanvasAccess) game).kasuga$pictureInPictureFactories());
         }
 
         private void render(Minecraft client, WorldUiCanvas canvas, Renderable renderable, ScreenRectangle area,
@@ -93,8 +93,7 @@ final class WorldUiCanvas implements AutoCloseable {
                 RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(
                         target.getColorTexture(), GuiRenderer.CLEAR_COLOR, target.getDepthTexture(), 0.0);
                 client.gameRenderer.lighting().setupFor(Lighting.Entry.ITEMS_3D);
-                ((GuiCanvasAccess.Factory) client.gameRenderer).kasuga$withGuiLighting(
-                        () -> ((GuiCanvasAccess) renderer).kasuga$renderCanvas(target, viewport));
+                ((GuiCanvasAccess) client.gameRenderer).kasuga$renderCanvas(renderer, target, viewport);
             } finally {
                 state.reset();
                 view.popMatrix();

@@ -134,6 +134,11 @@ block entity renderers, with layer selection, exploded views and block picking.
 World UI uses native GUI canvases composited against world depth. Panels can
 follow a scene host and accept crosshair, free-cursor, and text input.
 See the [world UI reference](doc/reference/world-ui-input.en.md#minecraft-263).
+Build the optional LDLib2 adapter with `./gradlew -PkasugaMinecraft=26.3 :external:uip:ldlib:jar`.
+Install the adapter from `external/uip/ldlib/build/26.3/libs` on both sides with KasugaLib and
+LDLib2 26.3.2.46 for NeoForge. `LdElement` hosts a client-side `ModularUI`, and `LdMenuElement`
+moves an initialized container menu into the world while keeping its server sync channel.
+`ModelPreviewElement` embeds a Kasuga model preview in an LDLib2 UI.
 `MinecraftFrameOutputs` exports the final main view and completed custom views as
 RenderPearl textures. Detached cameras and SDL preview windows use the same output API on
 Vulkan and OpenGL. See the [frame output reference](doc/reference/frame-output.en.md#minecraft-263).

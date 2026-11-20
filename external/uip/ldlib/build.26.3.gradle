@@ -1,0 +1,32 @@
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev'
+}
+
+group = mod_group_id
+version = "${mod_version}+mc26.3"
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+repositories {
+    mavenCentral()
+    maven {
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+}
+
+neoForge.version = project.neo_version_26_3
+
+dependencies {
+    compileOnly(project(':modules:multiversion')) { transitive = false }
+    compileOnly 'maven.modrinth:ldlib:Yj7iArC5' // LDLib2 26.3.2.46 for NeoForge
+}
+
+sourceSets.main.java.setSrcDirs(['src/minecraft26.3/java'])
+sourceSets.main.resources.setSrcDirs(['src/minecraft26.3/resources'])
+
+processResources {
+    Map properties = [mod_license: mod_license, mod_version: project.version]
+    inputs.properties properties
+    filesMatching('META-INF/neoforge.mods.toml') { expand properties }
+}
