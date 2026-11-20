@@ -91,6 +91,8 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/MCMeshBuilder.java',
                 'lib/kasuga/rendering/effect/DuplicatePolicy.java',
                 'lib/kasuga/rendering/effect/RenderRegistration.java',
+                'lib/kasuga/rendering/effect/PipelineRegistryCore.java',
+                'lib/kasuga/rendering/effect/WorldRenderPipeline.java',
                 'lib/kasuga/rendering/effect/post/PostProcessTargetDescriptor.java',
                 'lib/kasuga/rendering/effect/post/graph/PostProcessGraph.java',
                 'lib/kasuga/rendering/effect/post/graph/PostProcessGraphFrame.java',

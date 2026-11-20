@@ -55,6 +55,19 @@ class WorldRenderPipelineRegistryTest {
     }
 
     @Test
+    void identicalReplacementHasItsOwnLifetime() {
+        PipelineRegistryCore<String, String> registry = new PipelineRegistryCore<>();
+        ResourceLocation id = id("same_callback");
+        PipelineRegistryCore.Registration original = registry.register(owner(), id, "world", 0, DuplicatePolicy.FAIL, "same");
+        try (PipelineRegistryCore.Registration replacement = registry.register(owner(), id, "world", 0, DuplicatePolicy.REPLACE, "same")) {
+            assertFalse(original.isActive());
+            original.close();
+            assertTrue(replacement.isActive());
+        }
+        assertFalse(registry.isRegistered(id));
+    }
+
+    @Test
     void versionChangesOnlyWhenRegistryContentsChange() {
         PipelineRegistryCore<String, String> registry = new PipelineRegistryCore<>();
         ResourceLocation value = id("versioned");

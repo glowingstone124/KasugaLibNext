@@ -108,6 +108,19 @@ PipelineRegistration registration = pipelines.world(
 );
 ```
 
+## Minecraft 26.3 世界渲染回调
+
+使用 `WorldRenderPipelineRegistry.register(owner, descriptor, DuplicatePolicy.FAIL, callback)` 注册。
+通过 `RenderPipelineDescriptor.builder(id, RenderPhase.AFTER_OPAQUE_BLOCKS).priority(10).build()` 指定阶段和优先级。
+同一阶段按优先级升序执行，优先级相同时按 ID 排序。关闭注册句柄会移除回调。
+
+- `AFTER_OPAQUE_BLOCKS` 对应实体方块及裁切方块绘制完成，`AFTER_OPAQUE_FEATURES` 对应实体、方块实体和粒子的不透明绘制完成。
+- 经典透明模式分别触发 `AFTER_TRANSLUCENT_FEATURES`、`AFTER_TRANSLUCENT_BLOCKS`、`AFTER_PARTICLES` 和 `AFTER_WEATHER`。启用改进透明模式时，用 `OIT_TRANSLUCENT` 并从 `context.oitStage()` 读取原版 OIT 阶段。
+- `AFTER_SKY`、`POST_PROCESS` 和 `AFTER_LEVEL` 可创建自己的 RenderPearl pass。渲染顺序为 `POST_PROCESS` 回调、后处理图、`AFTER_LEVEL` 回调、世界 UI。
+- 其他阶段借用 `context.renderPass()`。在回调内绑定自己的已编译管线和输入，绘制完成后由 Minecraft 关闭 pass。使用 `PrepareRenderBuffersEvent` 上传或调整 GPU 缓冲区，使用 `ExtractLevelRenderStateEvent` 提取世界数据。
+
+26.3 的绘制状态由 RenderPearl `RenderPipeline` 声明。下文的 `RenderType` 状态和 `ShaderInstance` 注册用于 1.21.1。
+
 ## 绘制状态与 `RenderType`
 
 - `RenderDrawState` 是不可变的 Minecraft 绘制状态描述。可以复用该绘制状态，也可以用 `toBuilder()` 派生出新值。

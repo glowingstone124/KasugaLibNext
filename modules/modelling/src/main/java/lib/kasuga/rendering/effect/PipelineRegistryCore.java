@@ -45,13 +45,13 @@ final class PipelineRegistryCore<S, P> {
 
             @Override
             public boolean isActive() {
-                return entries.contains(entry);
+                return isCurrent(entry);
             }
 
             @Override
             public void close() {
                 synchronized (PipelineRegistryCore.this) {
-                    if (entries.remove(entry)) version++;
+                    if (entries.removeIf(candidate -> candidate == entry)) version++;
                 }
             }
         };
@@ -68,6 +68,10 @@ final class PipelineRegistryCore<S, P> {
     boolean isRegistered(ResourceLocation id) {
         Objects.requireNonNull(id, "id");
         return entries.stream().anyMatch(entry -> entry.id().equals(id));
+    }
+
+    boolean isCurrent(Entry<S, P> entry) {
+        return find(entry.id()) == entry;
     }
 
     int size() {

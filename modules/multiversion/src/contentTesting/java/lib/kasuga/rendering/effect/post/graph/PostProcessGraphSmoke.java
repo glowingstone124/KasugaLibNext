@@ -13,6 +13,7 @@ import com.mojang.renderpearl.api.textures.GpuTextureView;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.effect.DuplicatePolicy;
+import lib.kasuga.rendering.effect.WorldPipelineSmoke;
 import lib.kasuga.rendering.effect.post.PostProcessContext;
 import lib.kasuga.rendering.effect.post.PostProcessTargetDescriptor;
 import lib.kasuga.rendering.effect.post.PostProcessTargetDescriptor.ColorFormat;
@@ -116,6 +117,7 @@ public final class PostProcessGraphSmoke {
     }
 
     private static void install() {
+        WorldPipelineSmoke.install(() -> frames);
         PostProcessGraph broken = PostProcessGraph.builder(id("graph_smoke/broken"))
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/throw_once"), context -> {
                     threw = true;
@@ -184,6 +186,7 @@ public final class PostProcessGraphSmoke {
 
     private static void finish(Minecraft client) {
         if (!verifiedMain || !verifiedProbe) return;
+        WorldPipelineSmoke.finish();
         GpuTextureView probeView = PostProcessContext.color(probe, 0);
         registration.close();
         require(hdr.isClosed() && ldr.isClosed() && depth.isClosed() && probeView.isClosed() && !registration.isActive(), "Graph targets did not retire");

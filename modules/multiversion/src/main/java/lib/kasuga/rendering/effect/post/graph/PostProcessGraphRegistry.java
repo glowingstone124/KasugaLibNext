@@ -12,13 +12,13 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.event.GameShuttingDownEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import org.jetbrains.annotations.ApiStatus;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -72,7 +72,7 @@ public final class PostProcessGraphRegistry {
         PostProcessContext.registerPipelines(event);
     }
 
-    @SubscribeEvent(priority = EventPriority.LOW)
+    @ApiStatus.Internal
     public static void render(RenderLevelStageEvent.AfterLevel event) {
         if (ordered.isEmpty()) return;
         RenderTarget target = Minecraft.getInstance().gameRenderer.mainRenderTarget();

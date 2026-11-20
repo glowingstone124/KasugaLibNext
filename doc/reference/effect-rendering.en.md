@@ -108,6 +108,19 @@ PipelineRegistration registration = pipelines.world(
 );
 ```
 
+## Minecraft 26.3 World Render Callbacks
+
+Register with `WorldRenderPipelineRegistry.register(owner, descriptor, DuplicatePolicy.FAIL, callback)`.
+Choose a phase and priority with `RenderPipelineDescriptor.builder(id, RenderPhase.AFTER_OPAQUE_BLOCKS).priority(10).build()`.
+A phase runs callbacks in ascending priority and then ID order. Closing the registration removes the callback.
+
+- `AFTER_OPAQUE_BLOCKS` follows solid and cutout blocks. `AFTER_OPAQUE_FEATURES` follows opaque entity, block entity, and particle rendering.
+- Classic transparency exposes `AFTER_TRANSLUCENT_FEATURES`, `AFTER_TRANSLUCENT_BLOCKS`, `AFTER_PARTICLES`, and `AFTER_WEATHER`. Improved transparency exposes `OIT_TRANSLUCENT`, with the native stage available through `context.oitStage()`.
+- `AFTER_SKY`, `POST_PROCESS`, and `AFTER_LEVEL` can open a custom RenderPearl pass. The end of the world frame runs `POST_PROCESS` callbacks, post-process graphs, `AFTER_LEVEL` callbacks, and then world UI.
+- Other phases borrow `context.renderPass()`. Bind the compiled pipeline and its inputs in the callback. Minecraft closes the pass. Use `PrepareRenderBuffersEvent` for uploads or resizing and `ExtractLevelRenderStateEvent` to extract world data.
+
+On 26.3, the native RenderPearl `RenderPipeline` declares draw state. The `RenderType` and `ShaderInstance` setup below applies to 1.21.1.
+
 ## Draw State and `RenderType`
 
 - `RenderDrawState` is an immutable Minecraft draw-state description. You can reuse the draw state or derive a new value with `toBuilder()`.
