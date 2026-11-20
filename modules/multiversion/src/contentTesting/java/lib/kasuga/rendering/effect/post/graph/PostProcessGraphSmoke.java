@@ -2,14 +2,19 @@ package lib.kasuga.rendering.effect.post.graph;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import com.mojang.renderpearl.api.GpuFormat;
+import com.mojang.renderpearl.api.buffers.GpuBuffer;
+import com.mojang.renderpearl.api.commands.RenderPass;
+import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.ColorTargetState;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.UniformType;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
+import com.mojang.renderpearl.api.vertex.VertexFormat;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.effect.DuplicatePolicy;
 import lib.kasuga.rendering.effect.WorldPipelineSmoke;
@@ -17,12 +22,14 @@ import lib.kasuga.rendering.effect.post.PostProcessContext;
 import lib.kasuga.rendering.effect.post.PostProcessTargetDescriptor;
 import lib.kasuga.rendering.effect.post.PostProcessTargetDescriptor.ColorFormat;
 import lib.kasuga.rendering.effect.shader.RenderPearlFullscreenShader;
+import lib.kasuga.rendering.effect.shader.RenderPearlGraphicsShader;
 import lib.kasuga.shader.FloatArrayExpr;
 import lib.kasuga.shader.FloatExpr;
 import lib.kasuga.shader.IntExpr;
 import lib.kasuga.shader.Mat3Expr;
 import lib.kasuga.shader.Sampler2DExpr;
 import lib.kasuga.shader.ShaderProgram;
+import lib.kasuga.shader.Vec2Expr;
 import lib.kasuga.shader.Vec3Expr;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -31,8 +38,11 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
+import org.joml.Vector4f;
+import org.lwjgl.system.MemoryStack;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Optional;
 
@@ -43,6 +53,8 @@ public final class PostProcessGraphSmoke {
     private static final Identifier DEPTH_ID = id("graph_smoke/depth");
     private static final Identifier PROBE_ID = id("graph_smoke/probe");
     private static final Identifier GENERATED_ID = id("graph_smoke/generated");
+    private static final Identifier GRAPHICS_ID = id("graph_smoke/graphics");
+    private static final PostProcessGraphTarget GRAPHICS = PostProcessGraphTarget.managed(GRAPHICS_ID);
     private static final PostProcessGraphTarget GENERATED = PostProcessGraphTarget.managed(GENERATED_ID);
     private static final PostProcessGraphTarget PROBE = PostProcessGraphTarget.managed(PROBE_ID);
     private static final PostProcessGraphTarget COLORS = PostProcessGraphTarget.managed(COLORS_ID);
@@ -75,7 +87,11 @@ public final class PostProcessGraphSmoke {
     private static RenderTarget probe;
     private static RenderTarget generatedOutput;
     private static RenderPearlFullscreenShader generatedShader;
+    private static RenderTarget graphicsOutput;
+    private static RenderPearlGraphicsShader graphicsShader;
+    private static GpuBuffer triangle;
     private static boolean verifiedGenerated;
+    private static boolean verifiedGraphics;
     private static boolean threw;
     private static boolean verifiedMain;
     private static boolean verifiedProbe;
@@ -128,6 +144,17 @@ public final class PostProcessGraphSmoke {
                 failure = error;
             }
         });
+        Screenshot.takeScreenshot(graphicsOutput, image -> {
+            try (image) {
+                verifyGraphics(image);
+                client.execute(() -> {
+                    verifiedGraphics = true;
+                    finish();
+                });
+            } catch (RuntimeException error) {
+                failure = error;
+            }
+        });
         Screenshot.takeScreenshot(generatedOutput, image -> {
             try (image) {
                 verifyGenerated(image);
@@ -143,6 +170,7 @@ public final class PostProcessGraphSmoke {
 
     private static void install(Minecraft client) {
         compileGeneratedShader(client);
+        compileGraphicsShader(client);
         WorldPipelineSmoke.install(() -> frames);
         PostProcessGraph broken = PostProcessGraph.builder(id("graph_smoke/broken"))
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/throw_once"), context -> {
@@ -158,6 +186,7 @@ public final class PostProcessGraphSmoke {
                 .target(PostProcessTargetDescriptor.builder(DEPTH_ID).useDepth(true).build())
                 .target(PostProcessTargetDescriptor.builder(PROBE_ID).fixedSize(16, 16).build())
                 .target(PostProcessTargetDescriptor.builder(GENERATED_ID).fixedSize(16, 16).build())
+                .target(PostProcessTargetDescriptor.builder(GRAPHICS_ID).fixedSize(16, 16).build())
                 .prepare((context, frame) -> {
                     if (prepared) return true;
                     require(threw && !brokenRegistration.isActive(), "Failed graph was not isolated from the next graph");
@@ -178,6 +207,18 @@ public final class PostProcessGraphSmoke {
                             Map.of("Tint", new double[]{.1, .2, .5}, "Weights", new double[]{.9, .3, .8}),
                             pass -> context.bindColor(pass, "ProbeSampler", PROBE, 0));
                 }).reads(PROBE).writes(GENERATED).build())
+                .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/graphics"), context -> {
+                    graphicsOutput = context.write(GRAPHICS);
+                    RenderPearlGraphicsShader.Prepared preparedDraw = graphicsShader.prepare(Map.of("Scale", new double[]{.8}));
+                    RenderPassDescriptor descriptor = RenderPassDescriptor.builder(() -> "Kasuga generated triangle smoke")
+                            .withColorAttachment(graphicsOutput.getColorTextureView(), Optional.of(new Vector4f())).build();
+                    try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(descriptor)) {
+                        preparedDraw.bind(pass);
+                        context.bindColor(pass, "ProbeSampler", PROBE, 0);
+                        pass.setVertexBuffer(0, triangle.slice());
+                        pass.draw(3, 1, 0, 0);
+                    }
+                }).reads(PROBE).writes(GRAPHICS).build())
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/display"), context -> {
                     hdr = PostProcessContext.color(context.read(COLORS), 0);
                     ldr = PostProcessContext.color(context.read(COLORS), 1);
@@ -218,6 +259,43 @@ public final class PostProcessGraphSmoke {
         }
     }
 
+    private static void compileGraphicsShader(Minecraft client) {
+        ShaderProgram program = ShaderProgram.graphics("kasuga_lib:graph_smoke/graphics", vertex -> {
+            Vec2Expr position = vertex.inputVec2("Position");
+            FloatExpr scale = vertex.uniformFloat("Scale", 0);
+            vertex.outputFloat("strength", vertex.uniformFloat("Strength", .5f));
+            vertex.outputVec2("sampleUv", vertex.vec2(.5f, .5f));
+            Vec2Expr clip = position.mul(scale);
+            vertex.position(vertex.vec4(clip.x(), clip.y(), vertex.f32(.5f), vertex.f32(1)));
+        }, fragment -> {
+            Vec2Expr uv = fragment.inputVec2("sampleUv");
+            FloatExpr strength = fragment.inputFloat("strength");
+            FloatExpr weight = fragment.uniformFloatArray("Weights", 2, .3f).get(fragment.i32(0));
+            FloatExpr tint = fragment.uniformFloat("Tint", .4f);
+            FloatExpr blue = fragment.sampler2D("ProbeSampler").sample(uv).r().mul(.6f);
+            fragment.fragmentColor(fragment.vec4(strength.mul(tint), weight, blue, fragment.f32(1)));
+        });
+        VertexFormat format = VertexFormat.builder(0).addAttribute("Position", GpuFormat.RG32_FLOAT).build();
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            graphicsShader = RenderPearlGraphicsShader.compile(program, client.getResourceManager(), RenderPipeline.builder()
+                    .withVertexBinding(0, format).withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+                    .withColorTargetState(ColorTargetState.DEFAULT).withCull(false));
+            ByteBuffer vertices = stack.malloc(6 * Float.BYTES);
+            vertices.asFloatBuffer().put(new float[]{-.8f, -.8f, .8f, -.8f, 0, .8f});
+            triangle = RenderSystem.getDevice().createBuffer(() -> "Kasuga generated triangle", GpuBuffer.USAGE_VERTEX, vertices);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to compile generated graphics shader", exception);
+        }
+    }
+
+    private static void verifyGraphics(NativeImage image) {
+        int pixel = image.getPixel(8, 8);
+        require(Math.abs((pixel >>> 16 & 255) - 51) <= 1 && Math.abs((pixel >>> 8 & 255) - 77) <= 1
+                        && Math.abs((pixel & 255) - 153) <= 1,
+                "Linked graphics stages produced unexpected color: " + Integer.toHexString(pixel));
+        require((image.getPixel(0, 0) & 0xffffff) == 0, "Generated triangle extended beyond its vertex bounds");
+    }
+
     private static void verifyGenerated(NativeImage image) {
         int pixel = image.getPixel(8, 8);
         require(Math.abs((pixel >>> 16 & 255) - 13) <= 1 && Math.abs((pixel >>> 8 & 255) - 51) <= 1
@@ -243,8 +321,11 @@ public final class PostProcessGraphSmoke {
     }
 
     private static void finish() {
-        if (!verifiedMain || !verifiedProbe || !verifiedGenerated) return;
+        if (!verifiedMain || !verifiedProbe || !verifiedGenerated || !verifiedGraphics) return;
         generatedShader.close();
+        triangle.close();
+        graphicsShader.close();
+        LogUtils.getLogger().info("KASUGA_SHADER_GRAPHICS_PASS vertex-buffer,linked-varyings,shared-std140,sampler,triangle-bounds");
         LogUtils.getLogger().info("KASUGA_SHADER_DSL_PASS generated-fullscreen,uniform-defaults,uniform-overrides,std140,sampler");
         WorldPipelineSmoke.finish();
         GpuTextureView probeView = PostProcessContext.color(probe, 0);
