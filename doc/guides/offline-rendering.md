@@ -91,7 +91,7 @@ mainMonitor.close();
 
 Minecraft 26.3 的 `MinecraftFrameWindows.open(viewId, options)` 可在 Vulkan 和 OpenGL 下订阅已发布的帧，
 包括主画面和 GUI。它使用 Minecraft 设备创建 SDL 呈现表面，并按副窗口的像素尺寸保留画面比例。
-26.3 的独立世界机位 `createCamera` 仍在移植中。
+26.3 也支持 `createCamera`。该机位有独立的世界提取器和区块缓存，数据来自客户端已加载的区块。
 
 1.21.1 的辅助窗口使用共享纹理的 GL context、自己的 read FBO 和双向 GPU fence。
 呈现只复制完成的画面，不增加世界渲染；同一机位每帧只捕获一次，多个

@@ -25,6 +25,7 @@ abstract class MinecraftFrameOutputMixin {
     @Inject(method = "renderFrame", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
             target = "Lnet/neoforged/neoforge/client/ClientHooks;fireRenderFramePost(Lnet/minecraft/client/DeltaTracker;)V"))
     private void kasuga$publishFrame(boolean advanceGameTime, CallbackInfo ci) {
+        MinecraftCameras.renderDetachedViews();
         kasuga$exclusiveOutput = MinecraftFrameOutputs.publishMain(gameRenderer.mainRenderTarget());
     }
 

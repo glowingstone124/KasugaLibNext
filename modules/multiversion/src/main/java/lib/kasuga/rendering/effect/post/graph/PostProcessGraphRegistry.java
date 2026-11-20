@@ -96,6 +96,7 @@ public final class PostProcessGraphRegistry {
 
     @SubscribeEvent
     public static void unload(LevelEvent.Unload event) {
+        if (lib.kasuga.rendering.output.mc.MinecraftCameras.isCameraLevel(event.getLevel())) return;
         if (!(event.getLevel() instanceof ClientLevel)) return;
         for (Entry entry : ordered) retire(entry.pool());
     }

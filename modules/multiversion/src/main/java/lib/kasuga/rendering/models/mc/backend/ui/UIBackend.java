@@ -76,7 +76,7 @@ public final class UIBackend implements AutoCloseable {
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void renderWorld(RenderLevelStageEvent.AfterLevel event) {
-        if (MAIN_VIEW.panels.isEmpty()) return;
+        if (lib.kasuga.rendering.output.mc.CameraRenderScope.current() != null || MAIN_VIEW.panels.isEmpty()) return;
         MAIN_VIEW.render(Minecraft.getInstance(), event.getLevelRenderState().cameraRenderState,
                 event.getLevelRenderState().worldPartialTicks);
     }

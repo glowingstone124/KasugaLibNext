@@ -26,6 +26,7 @@ import lib.kasuga.rendering.cloud.SkyCloudSettings;
 import lib.kasuga.rendering.cloud.SkyCloudTemporal;
 import lib.kasuga.rendering.effect.WorldRenderPipelineContext;
 import lib.kasuga.rendering.effect.post.WorldPostProcess;
+import lib.kasuga.rendering.output.mc.CameraRenderScope;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.resources.Identifier;
@@ -55,15 +56,13 @@ final class SkyCloudRenderer implements AutoCloseable {
     private static final RenderPipeline COMPOSITE = pipeline("sky_composite", SKY_PARAMS, false, "CloudColor", "SceneColor", "SceneDepth");
     private final CloudVolumeAtlas atlas;
     private final LinkedHashMap<SkyCloudField.Key, WeatherTextures> weather = new LinkedHashMap<>(8, .75f, true);
-    private final WorldPostProcess composite = new WorldPostProcess("Kasuga sky cloud");
+    private final LinkedHashMap<String, ViewTargets> views = new LinkedHashMap<>();
     private final Matrix4f viewProjection = new Matrix4f();
     private final Matrix4f inverseProjection = new Matrix4f();
     private final Vector3f sun = new Vector3f();
     private final Vector3f sunlight = new Vector3f();
     private final Vector3f ambient = new Vector3f();
     private final Vector3f atmosphere = new Vector3f();
-    private SkyTarget current;
-    private History history;
 
     SkyCloudRenderer(CloudVolumeAtlas atlas) { this.atlas = atlas; }
 
@@ -81,8 +80,10 @@ final class SkyCloudRenderer implements AutoCloseable {
         Vec3 eye = context.camera().pos;
         SkyCloudField.Frame frame = CloudEffects.sky().sample(eye.x, eye.y, eye.z, context.partialTick(),
                 client.level.getRainLevel(context.partialTick()));
+        String viewId = CameraRenderScope.currentViewId();
         if (frame.coverage() == 0 || frame.settings().rendering().extinction() == 0) {
-            clearHistory();
+            ViewTargets targets = views.get(viewId);
+            if (targets != null) targets.clearHistory();
             return;
         }
         RenderTarget main = client.gameRenderer.mainRenderTarget();
@@ -95,12 +96,15 @@ final class SkyCloudRenderer implements AutoCloseable {
         int divisor = optics.resolutionDivisor(frame.settings().quality());
         int width = Math.ceilDiv(main.width, divisor);
         int height = Math.ceilDiv(main.height, divisor);
-        resize(width, height);
+        ViewTargets targets = views.computeIfAbsent(viewId, ignored -> new ViewTargets());
+        targets.resize(width, height);
+        SkyTarget current = targets.current;
         boolean useHistory = optics.temporal().historyWeight() > 0
                 && (optics.debug() == SkyCloudRendering.DebugView.NONE || optics.debug() == SkyCloudRendering.DebugView.HISTORY_VALIDITY);
-        if (useHistory && history == null) history = new History(width, height);
-        else if (!useHistory) clearHistory();
-        GpuBufferSlice parameters = uploadSky(frame, width, height);
+        if (useHistory && targets.history == null) targets.history = new History(width, height);
+        else if (!useHistory) targets.clearHistory();
+        History history = targets.history;
+        GpuBufferSlice parameters = uploadSky(frame, width, height, history);
         WeatherTextures textures = weather(frame.window());
         try (RenderPass pass = pass(current, MARCH)) {
             pass.setUniform(SKY_PARAMS, parameters);
@@ -112,8 +116,8 @@ final class SkyCloudRenderer implements AutoCloseable {
             bind(pass, "WeatherLayers", textures.layers.view, FilterMode.LINEAR);
             pass.draw(3, 1, 0, 0);
         }
-        SkyTarget resolved = useHistory ? resolve(frame, eye) : current;
-        composite.draw(main, COMPOSITE, (pass, scene, depth) -> {
+        SkyTarget resolved = useHistory ? resolve(frame, eye, current, history) : current;
+        targets.composite.draw(main, COMPOSITE, (pass, scene, depth) -> {
             pass.setUniform(SKY_PARAMS, parameters);
             bind(pass, "SceneColor", scene, FilterMode.NEAREST);
             bind(pass, "SceneDepth", depth, FilterMode.NEAREST);
@@ -135,7 +139,7 @@ final class SkyCloudRenderer implements AutoCloseable {
         else atmosphere.set(sky);
     }
 
-    private GpuBufferSlice uploadSky(SkyCloudField.Frame frame, int width, int height) {
+    private GpuBufferSlice uploadSky(SkyCloudField.Frame frame, int width, int height, History history) {
         SkyCloudSettings settings = frame.settings();
         SkyCloudRendering optics = settings.rendering();
         List<SkyCloudLayer> layers = settings.layers();
@@ -204,7 +208,7 @@ final class SkyCloudRenderer implements AutoCloseable {
         for (int index = used; index < SkyCloudField.MAX_LAYERS; index++) out.putVec4(0, 0, 0, 0);
     }
 
-    private SkyTarget resolve(SkyCloudField.Frame frame, Vec3 eye) {
+    private SkyTarget resolve(SkyCloudField.Frame frame, Vec3 eye, SkyTarget current, History history) {
         SkyCloudTemporal controls = frame.settings().rendering().temporal();
         double elapsed = frame.timeSeconds() - history.time;
         Vec3 delta = eye.subtract(history.eye);
@@ -245,14 +249,6 @@ final class SkyCloudRenderer implements AutoCloseable {
         return next;
     }
 
-    private void resize(int width, int height) {
-        if (current != null && current.color.width == width && current.color.height == height) return;
-        SkyTarget replacement = new SkyTarget(width, height);
-        if (current != null) current.close();
-        current = replacement;
-        clearHistory();
-    }
-
     private WeatherTextures weather(SkyCloudField.Window window) {
         WeatherTextures textures = weather.get(window.key());
         if (textures != null) return textures;
@@ -263,17 +259,44 @@ final class SkyCloudRenderer implements AutoCloseable {
     }
 
     void clearHistory() {
-        if (history != null) history.close();
-        history = null;
+        for (ViewTargets targets : views.values()) targets.clearHistory();
+    }
+
+    void releaseView(String viewId) {
+        ViewTargets targets = views.remove(viewId);
+        if (targets != null) targets.close();
     }
 
     @Override public void close() {
-        clearHistory();
-        if (current != null) current.close();
-        current = null;
+        for (ViewTargets targets : views.values()) targets.close();
+        views.clear();
         for (WeatherTextures textures : weather.values()) textures.close();
         weather.clear();
-        composite.close();
+    }
+
+    private static final class ViewTargets implements AutoCloseable {
+        final WorldPostProcess composite = new WorldPostProcess("Kasuga sky cloud");
+        SkyTarget current;
+        History history;
+
+        void resize(int width, int height) {
+            if (current != null && current.color.width == width && current.color.height == height) return;
+            SkyTarget replacement = new SkyTarget(width, height);
+            if (current != null) current.close();
+            current = replacement;
+            clearHistory();
+        }
+
+        void clearHistory() {
+            if (history != null) history.close();
+            history = null;
+        }
+
+        @Override public void close() {
+            clearHistory();
+            if (current != null) current.close();
+            composite.close();
+        }
     }
 
     private static void bind(RenderPass pass, String name, GpuTextureView view, FilterMode filter) {

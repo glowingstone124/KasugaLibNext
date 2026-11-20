@@ -90,7 +90,8 @@ only then releases the main context.
 
 In Minecraft 26.3, `MinecraftFrameWindows.open(viewId, options)` subscribes to published frames on Vulkan and OpenGL,
 including the main view and its GUI. The window uses an SDL presentation surface on Minecraft's device and fits each
-frame to the window's pixel size while preserving aspect ratio. The standalone world-camera `createCamera` API is still being ported to 26.3.
+frame to the window's pixel size while preserving aspect ratio. `createCamera` owns a detached world camera with
+its own extraction and chunk cache, populated from chunks already loaded by the client.
 
 On 1.21.1, an auxiliary window uses a GL context with a shared texture, its own read FBO and a bidirectional GPU fence.
 Presenting only copies the finished frame and adds no world rendering; a camera view captures once per frame and multiple

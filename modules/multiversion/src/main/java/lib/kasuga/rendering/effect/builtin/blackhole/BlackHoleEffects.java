@@ -91,6 +91,7 @@ public final class BlackHoleEffects {
 
     @SubscribeEvent
     public static void unload(LevelEvent.Unload event) {
+        if (lib.kasuga.rendering.output.mc.MinecraftCameras.isCameraLevel(event.getLevel())) return;
         if (event.getLevel() instanceof ClientLevel) clear();
     }
 

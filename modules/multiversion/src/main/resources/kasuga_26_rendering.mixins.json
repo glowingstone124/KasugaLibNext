@@ -3,6 +3,14 @@
   "package": "lib.kasuga.core.rendering.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "CameraBiomeSeedAccess",
+    "CameraChunkUpdatesMixin",
+
+    "CameraGameRendererMixin",
+    "CameraLevelRendererMixin",
+
+    "CameraOptionsMixin",
+    "CameraViewAccess",
     "CloudOptionsMixin",
     "FirstPersonHandsMixin",
     "FirstPersonRendererAccess",

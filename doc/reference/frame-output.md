@@ -17,7 +17,7 @@ var subscription = MinecraftFrameOutputs.open(FrameOutputMode.MIRROR, frame -> {
 
 有效的 `OFFSCREEN_ONLY` 订阅成功接收画面后，游戏窗口显示黑帧，窗口与交换链继续运行。关闭最后一个独占订阅后
 恢复游戏画面。自定义视角可在 render pass 结束后调用 `MinecraftFrameOutputs.publish(viewId, target)`，发布其
-RGBA8_UNORM `RenderTarget`。输出尺寸取自该目标。原版世界副相机和额外输出窗口仍需要各自的 26.3 适配器。
+RGBA8_UNORM `RenderTarget`。输出尺寸取自该目标。`MinecraftFrameWindows.open(viewId, options)` 可在 SDL 副窗口显示已发布的帧。`MinecraftFrameWindows.createCamera` 创建尺寸随该窗口 framebuffer 调整的独立机位。支持的配置见[摄像机参考](cameras.md)。
 
 ## Minecraft 1.21.1
 

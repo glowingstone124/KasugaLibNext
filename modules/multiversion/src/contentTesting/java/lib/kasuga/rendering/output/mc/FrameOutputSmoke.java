@@ -15,6 +15,8 @@ import lib.kasuga.rendering.output.FrameWindowOptions;
 import lib.kasuga.rendering.output.WorldCameraView;
 import lib.kasuga.rendering.output.camera.CameraHandle;
 import lib.kasuga.rendering.output.camera.CameraState;
+import lib.kasuga.rendering.output.camera.CameraRenderSettings;
+import net.minecraft.world.phys.Vec3;
 import lib.kasuga.rendering.output.camera.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -49,6 +51,15 @@ public final class FrameOutputSmoke {
     private static CameraHandle playerCamera;
     private static int playerFrames;
     private static boolean playerResumed;
+    private static CameraHandle[] detached;
+    private static final int[] cameraFrames = new int[2];
+    private static final int[] cameraPixels = new int[2];
+    private static WorldCameraView downward;
+    private static boolean detachedPassed;
+    private static boolean detachedMoved;
+    private static int movedPixel;
+    private static long ownedWindowFrames;
+    private static MinecraftFrameWindows.WindowCamera ownedWindow;
     private static int exclusiveFrames;
 
     private FrameOutputSmoke() {}
@@ -69,7 +80,7 @@ public final class FrameOutputSmoke {
         if (finished) return;
         if (failure != null) throw failure;
         if (++frames > 240) throw new IllegalStateException("Frame output smoke expired without a readback");
-        if (frames < 3) return;
+        if (frames < 3 || !verifyDetachedViews(client)) return;
         if (mirror == null) {
             verifyCustomView();
             verifyFittedCopy();
@@ -114,6 +125,70 @@ public final class FrameOutputSmoke {
         LogUtils.getLogger().info("KASUGA_FRAME_OUTPUT_PASS final-gui,shared,exclusive,retired,custom-view,resize");
         finished = true;
         client.stop();
+    }
+
+    private static boolean verifyDetachedViews(Minecraft client) throws Exception {
+        if (detachedPassed) return true;
+        if (detached == null) {
+            Vec3 eye = client.gameRenderer.mainCamera().position();
+            downward = new WorldCameraView(eye.x, eye.y, eye.z, 0, 80, 0, 60, 128, 96);
+            WorldCameraView upward = downward.withRotation(0, -75, 0);
+            CameraRenderSettings settings = new CameraRenderSettings(3, CameraRenderSettings.Quality.FAST,
+                    CameraRenderSettings.Shader.disabled());
+            ownedWindow = MinecraftFrameWindows.createCamera("kasuga:owned-camera", () -> downward, settings,
+                    new FrameWindowOptions("Kasuga Independent Camera", 160, 96));
+            detached = new CameraHandle[]{
+                    MinecraftCameras.createFree("kasuga:down", () -> downward, settings, frame -> recordCamera(frame, 0)),
+                    MinecraftCameras.createFree("kasuga:up", upward, settings, frame -> recordCamera(frame, 1))
+            };
+            return false;
+        }
+        for (CameraHandle camera : detached) {
+            if (camera.state() == CameraState.FAILED) throw new IllegalStateException("Detached camera failed", camera.failure().orElse(null));
+        }
+        if (cameraPixels[0] == 0 || cameraPixels[1] == 0) return false;
+        require(cameraPixels[0] != cameraPixels[1], "Detached cameras rendered identical center pixels: " + Integer.toHexString(cameraPixels[0]));
+        if (!detachedMoved) {
+            require(ownedWindow.presentedFrames() > 0, "Detached camera window did not present");
+            detachedMoved = true;
+            // Match the other camera's orientation plus change output size.
+            downward = new WorldCameraView(downward.x(), downward.y(), downward.z(), 0, -75, 0, 60, 160, 120);
+            ownedWindowFrames = ownedWindow.presentedFrames();
+            ownedWindow.resize(200, 120);
+            return false;
+        }
+        if (movedPixel == 0 || ownedWindow.presentedFrames() < ownedWindowFrames + 3) return false;
+        require(movedPixel != cameraPixels[0], "Updating the camera pose did not change the output");
+        int[] framebufferSize = ownedWindow.framebufferSize();
+        require(ownedWindow.pose().width() == framebufferSize[0] && ownedWindow.pose().height() == framebufferSize[1],
+                "Window-owned camera did not adopt the new framebuffer dimensions");
+        ownedWindow.close();
+        require(ownedWindow.isClosed() && !MinecraftFrameOutputs.hasOutputs("kasuga:owned-camera"), "Owned window leaked the camera");
+        for (CameraHandle camera : detached) camera.close();
+        require(!MinecraftFrameOutputs.hasOutputs("kasuga:down") && !MinecraftFrameOutputs.hasOutputs("kasuga:up"),
+                "Detached outputs leaked subscriptions");
+        detachedPassed = true;
+        LogUtils.getLogger().info("KASUGA_DETACHED_CAMERA_PASS distinct-pixels,move,resize,owned-window,close {} {} {}", Integer.toHexString(cameraPixels[0]), Integer.toHexString(cameraPixels[1]), Integer.toHexString(movedPixel));
+        return true;
+    }
+
+    private static void recordCamera(OutputFrame<GpuTextureView> frame, int index) {
+        boolean moved = index == 0 && detachedMoved && movedPixel == 0;
+        if (++cameraFrames[index] != 45 && !moved) return;
+        if (moved) require(frame.width() == 160 && frame.height() == 120, "Detached output did not resize");
+        TextureTarget screenshot = new TextureTarget("Detached camera smoke", frame.width(), frame.height(), GpuFormat.RGBA8_UNORM, null);
+        try {
+            PostProcessContext.copyColor(frame.resource(), screenshot.getColorTextureView(), false);
+            Screenshot.takeScreenshot(screenshot, pixels -> {
+                try (pixels) {
+                    int center = pixels.getPixel(frame.width() / 2, frame.height() / 2);
+                    if (moved) movedPixel = center;
+                    else cameraPixels[index] = center;
+                }
+            });
+        } finally {
+            screenshot.destroyBuffers();
+        }
     }
 
     private static void verifyPlayerCamera(Minecraft client) throws Exception {

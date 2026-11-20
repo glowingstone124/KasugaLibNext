@@ -135,7 +135,8 @@ World UI uses native GUI canvases composited against world depth. Panels can
 follow a scene host and accept crosshair, free-cursor, and text input.
 See the [world UI reference](doc/reference/world-ui-input.en.md#minecraft-263).
 `MinecraftFrameOutputs` exports the final main view and completed custom views as
-RenderPearl textures. See the [frame output reference](doc/reference/frame-output.en.md#minecraft-263).
+RenderPearl textures. Detached cameras and SDL preview windows use the same output API on
+Vulkan and OpenGL. See the [frame output reference](doc/reference/frame-output.en.md#minecraft-263).
 The post-process graph supports RenderPearl fullscreen passes, HDR color
 attachments, and color and depth copies. See the
 [26.3 post-process graph reference](doc/reference/effects-and-postfx.en.md#minecraft-263-post-process-graphs).
@@ -163,7 +164,8 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_NATIVE_JSON_PASS`, `KASUGA_MMD_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
 `KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_PIPELINE_PASS`, `KASUGA_POST_GRAPH_PASS`,
 `KASUGA_SHADER_DSL_PASS`, `KASUGA_BLACK_HOLE_PASS`, `KASUGA_WORLD_UI_PASS`,
-and `KASUGA_FRAME_OUTPUT_PASS`.
+`KASUGA_FRAME_OUTPUT_PASS`, `KASUGA_FRAME_WINDOW_PASS`, `KASUGA_PLAYER_CAMERA_PASS`,
+and `KASUGA_DETACHED_CAMERA_PASS`.
 Captures of the models, animation, lighting, held documents, and GUI previews
 are saved in the test game directory.
 

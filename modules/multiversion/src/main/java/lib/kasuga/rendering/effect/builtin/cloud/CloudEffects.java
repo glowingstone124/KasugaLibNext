@@ -78,6 +78,8 @@ public final class CloudEffects {
         else if (!enabled || !skyEnabled) SKY_RENDERER.clearHistory();
     }
 
+    public static void releaseView(String viewId) { SKY_RENDERER.releaseView(viewId); }
+
     public static synchronized void clear() {
         if (pipeline != null) pipeline.clear();
     }

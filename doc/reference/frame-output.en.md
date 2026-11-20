@@ -21,8 +21,9 @@ var subscription = MinecraftFrameOutputs.open(FrameOutputMode.MIRROR, frame -> {
 frame. This keeps the window surface and swapchain running. Removing the last exclusive
 subscriber restores the game picture. A custom producer can publish its RGBA8_UNORM
 `RenderTarget` with `MinecraftFrameOutputs.publish(viewId, target)` outside an active render pass.
-The dimensions come from that target. The subscription API accepts custom view IDs. Vanilla
-secondary world cameras and additional output windows still require their 26.3 adapters.
+The dimensions come from that target. `MinecraftFrameWindows.open(viewId, options)` mirrors a
+published view in an SDL window. `MinecraftFrameWindows.createCamera` owns a detached view sized
+to the window framebuffer. See the [camera reference](cameras.en.md) for the supported settings.
 
 ## Minecraft 1.21.1
 
