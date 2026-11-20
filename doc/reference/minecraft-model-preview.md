@@ -14,8 +14,9 @@ preview.setLayers(LayerLayout.ASSEMBLED.range(0, 5).separation(.5));
 
 同一个来源接口用于原版 `ModelPreviewWidget` 和 `SceneModels`。GUI 宿主从 `removed()`
 关闭控件，场景关闭时会释放场景持有的来源。`preview.pick(x, y)` 使用画布内归一化坐标，
-返回源方块位置和方块状态。Vulkan 和 OpenGL 路径使用原版烘焙方块和流体几何。
-方块实体 NBT 可用 `BlockModelSource.blockEntityData(position)` 读取，方块实体渲染仍在移植。
+返回源方块位置和方块状态。Vulkan 和 OpenGL 路径使用原版烘焙方块、流体几何和方块实体渲染器。
+方块实体从导入的 NBT 加载到独立的预览世界，随对应层显示、隐藏和移动。方块实体使用静态快照，
+渲染器可读取预览中的邻居和方块状态。用 `BlockModelSource.blockEntityData(position)` 读取原始 NBT。
 
 ## Minecraft 1.21.1
 

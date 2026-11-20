@@ -25,6 +25,11 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.DyeColor;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignText;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3fc;
 import org.slf4j.Logger;
@@ -40,6 +45,9 @@ public final class StructurePreviewSmoke {
     private static final int DATA_VERSION = SharedConstants.getCurrentVersion().dataVersion().version();
     private static final BlockPos RED = new BlockPos(1, 0, 0);
     private static final BlockPos LIME = new BlockPos(1, 1, 0);
+    private static final BlockPos CHEST = new BlockPos(0, 0, 1);
+    private static final BlockPos SIGN = new BlockPos(0, 1, 1);
+    private static final String SIGN_MESSAGE = "KASUGA";
     private static Phase phase = Phase.WORLD;
     private static SceneModels scene;
     private static BlockModelSource source;
@@ -57,10 +65,11 @@ public final class StructurePreviewSmoke {
         try {
             validateImporters(client);
             source = readFixture(client, structure());
-            CompoundTag metadata = source.blockEntityData(new BlockPos(0, 0, 1));
+            CompoundTag metadata = source.blockEntityData(CHEST);
             if (metadata == null || !metadata.getStringOr("id", "").equals("minecraft:chest")) {
                 throw new IllegalStateException("Structure import lost block entity metadata");
             }
+            checkBlockEntities(client, source);
         } catch (IOException error) {
             throw new IllegalStateException("Could not read structure fixtures", error);
         }
@@ -103,21 +112,25 @@ public final class StructurePreviewSmoke {
     }
 
     private static void evaluate(Minecraft client, Phase sampled, Pixels pixels) {
-        LOGGER.info("KASUGA_STRUCTURE_CAPTURE phase={} red={} lime={} water={}",
-                sampled, pixels.red(), pixels.lime(), pixels.water());
+        LOGGER.info("KASUGA_STRUCTURE_CAPTURE phase={} red={} lime={} water={} chest={} sign={}",
+                sampled, pixels.red(), pixels.lime(), pixels.water(), pixels.chest(), pixels.sign());
         boolean sliced = sampled == Phase.SLICED || sampled == Phase.SPACED || sampled == Phase.RELOADED;
-        if (pixels.red() < 400 || sampled != Phase.WORLD && pixels.water() < 200
+        if (pixels.red() < 400 || pixels.chest() < 300 || sampled != Phase.WORLD && pixels.water() < 200
+                || (sliced ? pixels.sign() > 20 : pixels.sign() < 30)
                 || (sliced ? pixels.lime() > 20 : pixels.lime() < 400)) {
             throw new IllegalStateException("Structure geometry missing or incorrect at " + sampled + ": " + pixels);
         }
         switch (sampled) {
             case WORLD -> {
+                BlockEntity sign = source.blockEntity(SIGN);
                 scene.close();
+                if (sign == null || sign.hasLevel()) throw new IllegalStateException("World scene retained a preview block entity");
                 try {
                     source = readFixture(client, structure());
                 } catch (IOException error) {
                     throw new IllegalStateException(error);
                 }
+                checkBlockEntities(client, source);
                 screen = new PreviewScreen(source);
                 client.gui.setScreen(screen);
                 phase = Phase.ASSEMBLED;
@@ -150,12 +163,15 @@ public final class StructurePreviewSmoke {
                 if (source.geometryBuilds() != builds + 1) {
                     throw new IllegalStateException("Resource reload failed to invalidate cached structure geometry");
                 }
+                BlockEntity sign = source.blockEntity(SIGN);
                 client.gui.setScreen(null);
-                if (source.snapshot(LayerLayout.ASSEMBLED, 0) != null || !screen.widget.preview().isClosed()) {
+                if (source.snapshot(LayerLayout.ASSEMBLED, 0) != null || !screen.widget.preview().isClosed()
+                        || sign == null || sign.hasLevel() || source.blockEntity(SIGN) != null) {
                     throw new IllegalStateException("Removing the structure preview did not close its source");
                 }
                 finished = true;
                 LOGGER.info("KASUGA_STRUCTURE_PREVIEW_PASS world,gui,vanilla-nbt,litematic,sponge,fluid,layers,cache,reload,pick,closed");
+                LOGGER.info("KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS chest,sign-text,private-level,layer-visibility,detached");
                 client.stop();
             }
         }
@@ -167,10 +183,23 @@ public final class StructurePreviewSmoke {
         if (!hit.position().equals(expected)) throw new IllegalStateException("Unexpected structure block at " + hit);
     }
 
+    private static void checkBlockEntities(Minecraft client, BlockModelSource source) {
+        if (!(source.blockEntity(CHEST) instanceof ChestBlockEntity chest)
+                || !(source.blockEntity(SIGN) instanceof SignBlockEntity sign)
+                || sign.getLevel() != source.previewLevel() || sign.getLevel() == client.level
+                || chest.getLevel() != sign.getLevel()
+                || source.previewLevel().setBlock(SIGN, Blocks.AIR.defaultBlockState(), 3)
+                || !sign.getText(SignTextSlot.FRONT).getMessages(false).getFirst().getString().equals(SIGN_MESSAGE)) {
+            throw new IllegalStateException("Structure block entities were not loaded in a private read-only level");
+        }
+    }
+
     private static Pixels readPixels(NativeImage image) {
         int red = 0;
         int lime = 0;
         int water = 0;
+        int chest = 0;
+        int sign = 0;
         for (int y = image.getHeight() / 4; y < image.getHeight() * 3 / 4; y++) {
             for (int x = image.getWidth() / 4; x < image.getWidth() * 3 / 4; x++) {
                 int pixel = image.getPixel(x, y);
@@ -180,9 +209,11 @@ public final class StructurePreviewSmoke {
                 if (r > 65 && r > g * 2 && r > b * 2) red++;
                 if (g > 75 && g > r * 1.35 && g > b * 2) lime++;
                 if (b > 78 && b > r * 1.45 && b > g * 1.15 && b > r + 45) water++;
+                if (r > 60 && g > 36 && r > g * 1.25 && g > b * 1.45) chest++;
+                if (r > 110 && b > 115 && r > g * 1.55 && b > g * 1.55) sign++;
             }
         }
-        return new Pixels(red, lime, water);
+        return new Pixels(red, lime, water, chest, sign);
     }
 
     private static BlockModelSource readFixture(Minecraft client, CompoundTag fixture) throws IOException {
@@ -218,19 +249,27 @@ public final class StructurePreviewSmoke {
         palette.add(NbtUtils.writeBlockState(Blocks.CONCRETE.pick(DyeColor.RED).defaultBlockState()));
         palette.add(NbtUtils.writeBlockState(Blocks.CONCRETE.pick(DyeColor.LIME).defaultBlockState()));
         palette.add(NbtUtils.writeBlockState(Blocks.WATER.defaultBlockState()));
-        palette.add(NbtUtils.writeBlockState(Blocks.CONCRETE.pick(DyeColor.GRAY).defaultBlockState()));
         palette.add(NbtUtils.writeBlockState(Blocks.CHEST.defaultBlockState()));
+        palette.add(NbtUtils.writeBlockState(Blocks.OAK_SIGN.defaultBlockState()));
         root.put("palette", palette);
         ListTag blocks = new ListTag();
         blocks.add(block(RED, 0));
         blocks.add(block(LIME, 1));
         blocks.add(block(new BlockPos(2, 0, 0), 2));
-        blocks.add(block(new BlockPos(0, 0, 0), 3));
-        CompoundTag chest = block(new BlockPos(0, 0, 1), 4);
+        CompoundTag chest = block(CHEST, 3);
         CompoundTag metadata = new CompoundTag();
         metadata.putString("id", "minecraft:chest");
         chest.put("nbt", metadata);
         blocks.add(chest);
+        CompoundTag sign = block(SIGN, 4);
+        CompoundTag signMetadata = new CompoundTag();
+        signMetadata.putString("id", "minecraft:sign");
+        SignText text = SignText.EMPTY.asMutable().setLine(0, Component.literal(SIGN_MESSAGE))
+                .setColor(DyeColor.MAGENTA).setTextGlowing(true).asImmutable();
+        signMetadata.store("front_text", SignText.CODEC, text);
+        signMetadata.store("back_text", SignText.CODEC, text);
+        sign.put("nbt", signMetadata);
+        blocks.add(sign);
         root.put("blocks", blocks);
         return root;
     }
@@ -295,7 +334,7 @@ public final class StructurePreviewSmoke {
     }
 
     private enum Phase { WORLD, ASSEMBLED, SLICED, SPACED, RELOADED }
-    private record Pixels(int red, int lime, int water) {}
+    private record Pixels(int red, int lime, int water, int chest, int sign) {}
 
     private static final class PreviewScreen extends Screen {
         private final ModelPreviewWidget widget;

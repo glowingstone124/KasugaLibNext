@@ -3,6 +3,7 @@ package lib.kasuga.rendering.models.mc.scene;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
@@ -12,7 +13,9 @@ import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
+import org.joml.Vector3fc;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -81,20 +84,51 @@ public interface MinecraftModelSource extends AutoCloseable {
         return new Vec3(result.x, result.y, result.z);
     }
 
+    @FunctionalInterface
+    interface Submission {
+        void submit(PoseStack pose, SubmitNodeCollector nodes);
+    }
+
+    /** Camera position and basis in the same coordinates as the initial drawing pose. */
+    record Viewpoint(Vec3 position, Vector3fc forward, Vector3fc up) {
+        public CameraRenderState inSource(PoseStack pose, BlockPos origin) {
+            Matrix4f inverse = new Matrix4f(pose.last().pose()).invertAffine();
+            Vector3f localPosition = inverse.transformPosition(new Vector3f((float) position.x, (float) position.y, (float) position.z));
+            Vector3f localForward = inverse.transformDirection(forward, new Vector3f()).normalize();
+            Vector3f localUp = inverse.transformDirection(up, new Vector3f()).normalize();
+            CameraRenderState camera = new CameraRenderState();
+            camera.initialized = true;
+            camera.pos = new Vec3(localPosition).add(origin.getX(), origin.getY(), origin.getZ());
+            camera.blockPos = BlockPos.containing(camera.pos);
+            camera.xRot = (float) Math.toDegrees(Math.asin(Math.clamp(-localForward.y, -1f, 1f)));
+            camera.yRot = (float) Math.toDegrees(Math.atan2(-localForward.x, localForward.z));
+            camera.orientation.set(new Quaternionf().lookAlong(localForward, localUp).invert());
+            camera.viewRotationMatrix.rotation(new Quaternionf(camera.orientation).conjugate());
+            return camera;
+        }
+    }
+
     /** Captures commands during level extraction or submits them to the active GUI preview. */
     record Context(PoseStack pose, @Nullable ExtractLevelRenderStateEvent extraction, @Nullable SubmitNodeCollector nodes,
-                   Object frameToken, float partialTick, int packedLight) {
+                   Object frameToken, float partialTick, int packedLight, Viewpoint viewpoint) {
         public Context(PoseStack pose, ExtractLevelRenderStateEvent extraction, float partialTick, int packedLight) {
-            this(pose, extraction, null, extraction, partialTick, packedLight);
+            this(pose, extraction, null, extraction, partialTick, packedLight,
+                    new Viewpoint(Vec3.ZERO, extraction.getCamera().forwardVector(), extraction.getCamera().upVector()));
         }
 
-        public Context(PoseStack pose, SubmitNodeCollector nodes, Object frameToken, float partialTick, int packedLight) {
-            this(pose, null, nodes, frameToken, partialTick, packedLight);
+        public Context(PoseStack pose, SubmitNodeCollector nodes, Object frameToken, float partialTick, int packedLight,
+                       Viewpoint viewpoint) {
+            this(pose, null, nodes, frameToken, partialTick, packedLight, viewpoint);
         }
 
         public void submit(RenderType layer, SubmitNodeCollector.CustomGeometryRenderer geometry) {
-            if (nodes != null) nodes.submitCustomGeometry(pose, layer, geometry);
-            else SceneGeometry.add(extraction, pose, layer, geometry);
+            submit((stack, collector) -> collector.submitCustomGeometry(stack, layer, geometry));
+        }
+
+        /** Submit the extracted state of a native renderer; the world collector may consume it later in the frame. */
+        public void submit(Submission submission) {
+            if (nodes != null) submission.submit(pose, nodes);
+            else SceneGeometry.add(Objects.requireNonNull(extraction), pose, submission);
         }
     }
 

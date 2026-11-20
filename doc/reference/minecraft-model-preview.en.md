@@ -15,8 +15,10 @@ Use `structure(level, path)`, `litematic(level, path)`, or `blueprint(level, pat
 The source API works with vanilla `ModelPreviewWidget` and `SceneModels`. Close widgets from
 `Screen.removed()`. Closing a scene releases the sources it owns. `preview.pick(x, y)` reports
 the original block position and block state using normalized viewport coordinates. Both graphics
-backends use Minecraft's baked block and fluid geometry. `BlockModelSource.blockEntityData(position)`
-returns imported block entity NBT. Block entity rendering is still being ported.
+backends use Minecraft's baked blocks, fluids, and block entity renderers. Block entities load
+from NBT into a private preview level and follow their layer visibility and placement. Renderers
+can inspect neighboring blocks in that level. `BlockModelSource.blockEntityData(position)` returns
+the original imported metadata.
 
 ## Minecraft 1.21.1
 

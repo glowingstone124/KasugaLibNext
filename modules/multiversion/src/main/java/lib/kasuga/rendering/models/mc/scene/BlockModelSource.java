@@ -2,9 +2,12 @@ package lib.kasuga.rendering.models.mc.scene;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.block.BlockAndTintGetter;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
+import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
+import net.minecraft.client.renderer.blockentity.state.BlockEntityRenderState;
+import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.CardinalLighting;
@@ -12,8 +15,8 @@ import net.minecraft.world.level.ColorResolver;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.biome.Biome;
-import net.minecraft.world.level.biome.Biomes;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate.StructureBlockInfo;
@@ -35,16 +38,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 
-/** A frozen block snapshot rendered with Minecraft's baked block and fluid geometry. */
+/** A frozen block snapshot with Minecraft's native block, fluid and block-entity renderers. */
 public class BlockModelSource extends LayeredModelSource {
-    private final Map<BlockPos, BlockState> states = new HashMap<>();
+    private final Map<BlockPos, BlockState> states;
     private final Map<BlockPos, CompoundTag> blockEntityData = new HashMap<>();
+    private final PreviewLevel level;
     private final BlockPos origin;
     private final Optional<BlockDimensions> dimensions;
     private final Biome biome;
     private final View fullView = new View(null);
     private final Slice assembled;
     private final Map<Slice, BlockPreviewGeometry> cachedGeometry = new IdentityHashMap<>();
+    private final Map<Slice, List<PositionedEntity>> entitySlices = new IdentityHashMap<>();
     private final Map<LayerLayout.Axis, Map<Integer, Map<Identifier, Integer>>> statistics =
             new EnumMap<>(LayerLayout.Axis.class);
     private @Nullable LayerLayout.Axis cachedAxis;
@@ -58,6 +63,7 @@ public class BlockModelSource extends LayeredModelSource {
     public BlockModelSource(Level host, List<StructureBlockInfo> blocks, BlockPos origin) {
         this.origin = origin.immutable();
         if (blocks.size() > MinecraftModelSources.MAX_BLOCKS) throw new IllegalArgumentException("Too many structure blocks");
+        Map<BlockPos, BlockState> states = new HashMap<>();
         for (StructureBlockInfo info : blocks) {
             if (info.state().isAir()) continue;
             BlockPos position = info.pos().immutable();
@@ -76,11 +82,25 @@ public class BlockModelSource extends LayeredModelSource {
             elements.add(new Element(x, y, z, new ModelBounds(x, y, z, x + 1.0, y + 1.0, z + 1.0)));
         }
         assembled = new Slice(LayerLayout.Axis.Y, 0, elements, false);
-        biome = host.registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS).value();
+        level = new PreviewLevel(host, states);
+        this.states = level.blockStates();
+        biome = level.getBiome(BlockPos.ZERO).value();
+        try {
+            for (Map.Entry<BlockPos, BlockState> block : this.states.entrySet()) {
+                if (!(block.getValue().getBlock() instanceof EntityBlock factory)) continue;
+                BlockEntity entity = factory.newBlockEntity(block.getKey(), block.getValue());
+                if (entity != null) level.addPreviewBlockEntity(entity, blockEntityData.get(block.getKey()));
+            }
+        } catch (RuntimeException | Error failure) {
+            close();
+            throw failure;
+        }
     }
 
     public Optional<BlockDimensions> dimensions() { return dimensions; }
     public long geometryBuilds() { return geometryBuilds; }
+    public PreviewLevel previewLevel() { return level; }
+    public @Nullable BlockEntity blockEntity(BlockPos position) { return level.getBlockEntity(position); }
 
     /** A copy of the imported metadata at the original block position. */
     public @Nullable CompoundTag blockEntityData(BlockPos position) {
@@ -114,6 +134,7 @@ public class BlockModelSource extends LayeredModelSource {
         long generation = ModelPreviewResources.generation();
         if (bakedGeneration != generation || slice.isolated() && cachedAxis != null && cachedAxis != slice.axis()) {
             cachedGeometry.clear();
+            entitySlices.clear();
             cachedAxis = null;
             bakedGeneration = generation;
         }
@@ -126,6 +147,52 @@ public class BlockModelSource extends LayeredModelSource {
             geometryBuilds++;
         }
         geometry.submit(context);
+        renderBlockEntities(slice, context);
+    }
+
+    /** Native hosts can reuse the private block entities with their own static geometry. */
+    public void renderEntitiesOnly(Slice slice, Context context) {
+        if (!closed) renderBlockEntities(slice, context);
+    }
+
+    protected boolean shouldRenderBlockEntity(BlockEntity entity) { return true; }
+
+    protected void renderBlockEntities(Slice slice, Context context) {
+        List<PositionedEntity> entities = entitySlices.computeIfAbsent(slice, this::selectBlockEntities);
+        if (entities.isEmpty()) return;
+        CameraRenderState camera = context.viewpoint().inSource(context.pose(), origin);
+        BlockEntityRenderDispatcher dispatcher = Minecraft.getInstance().getBlockEntityRenderDispatcher();
+        for (PositionedEntity entry : entities) {
+            if (!shouldRenderBlockEntity(entry.entity())) continue;
+            submitBlockEntity(dispatcher, entry, camera, context);
+        }
+    }
+
+    private List<PositionedEntity> selectBlockEntities(Slice slice) {
+        List<PositionedEntity> entities = new ArrayList<>();
+        for (Element element : slice.elements()) {
+            BlockEntity entity = level.getBlockEntity(position(element));
+            if (entity != null) entities.add(new PositionedEntity(element, entity));
+        }
+        return List.copyOf(entities);
+    }
+
+    private static <S extends BlockEntityRenderState> void submitBlockEntity(BlockEntityRenderDispatcher dispatcher,
+            PositionedEntity entry, CameraRenderState camera, Context context) {
+        BlockEntity entity = entry.entity();
+        BlockEntityRenderer<BlockEntity, S> renderer = dispatcher.getRenderer(entity);
+        if (renderer == null || !entity.isValidBlockState(entity.getBlockState())) return;
+        S state = renderer.createRenderState();
+        renderer.extractRenderState(entity, state, context.partialTick(), camera.pos, null);
+        state.lightCoords = context.packedLight();
+        context.pose().pushPose();
+        try {
+            Element element = entry.element();
+            context.pose().translate(element.x(), element.y(), element.z());
+            context.submit((pose, nodes) -> dispatcher.submit(state, pose, nodes, camera));
+        } finally {
+            context.pose().popPose();
+        }
     }
 
     @Override protected Optional<BlockHit> pickSlice(Slice slice, Vec3 from, Vec3 to) {
@@ -155,12 +222,16 @@ public class BlockModelSource extends LayeredModelSource {
     }
 
     @Override public void close() {
+        if (closed) return;
         super.close();
         cachedGeometry.clear();
+        entitySlices.clear();
+        level.close();
         blockEntityData.clear();
-        states.clear();
         statistics.clear();
     }
+
+    private record PositionedEntity(Element element, BlockEntity entity) {}
 
     private final class View implements BlockAndTintGetter {
         private final @Nullable Slice slice;
@@ -174,9 +245,9 @@ public class BlockModelSource extends LayeredModelSource {
         }
 
         @Override public FluidState getFluidState(BlockPos pos) { return getBlockState(pos).getFluidState(); }
-        @Override public @Nullable BlockEntity getBlockEntity(BlockPos pos) { return null; }
-        @Override public int getHeight() { return MinecraftModelSources.MAX_SPAN; }
-        @Override public int getMinY() { return origin.getY(); }
+        @Override public @Nullable BlockEntity getBlockEntity(BlockPos pos) { return level.getBlockEntity(pos); }
+        @Override public int getHeight() { return level.getHeight(); }
+        @Override public int getMinY() { return level.getMinY(); }
         @Override public LevelLightEngine getLightEngine() { return LevelLightEngine.EMPTY; }
         @Override public int getBrightness(LightLayer layer, BlockPos pos) { return 0; }
         @Override public int getRawBrightness(BlockPos pos, int darkening) { return 0; }

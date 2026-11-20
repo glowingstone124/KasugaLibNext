@@ -185,10 +185,14 @@ public final class GuiModelPreview implements AutoCloseable {
             // Minecraft's PIP depth planes are fixed at ±1000, independent of zoom and GUI scale.
             float scaledRadius = pose.last().pose().m00() * state.depthRadius();
             if (scaledRadius > 500f) pose.scale(1, 1, 500f / scaledRadius);
+            Matrix4f targetPose = pose.last().pose();
+            MinecraftModelSource.Viewpoint viewpoint = new MinecraftModelSource.Viewpoint(
+                    new Vec3(targetPose.m30(), targetPose.m31(), Math.min(scaledRadius, 500f) * 4.0),
+                    new Vector3f(0, 0, -1), new Vector3f(0, -1, 0));
             pose.rotateDegrees(Axis.XP, 180f);
             pose.mulPose(state.view());
             state.snapshot().render(new MinecraftModelSource.Context(
-                    pose, nodes, state.frameToken(), state.partialTick(), LightCoordsUtil.FULL_BRIGHT));
+                    pose, nodes, state.frameToken(), state.partialTick(), LightCoordsUtil.FULL_BRIGHT, viewpoint));
         }
     }
 }

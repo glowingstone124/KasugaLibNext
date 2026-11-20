@@ -2,8 +2,6 @@ package lib.kasuga.rendering.models.mc.scene;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import lib.kasuga.KasugaLib;
-import net.minecraft.client.renderer.SubmitNodeCollector;
-import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.context.ContextKey;
@@ -25,15 +23,14 @@ public final class SceneGeometry {
 
     private SceneGeometry() {}
 
-    public static void add(ExtractLevelRenderStateEvent event, PoseStack pose, RenderType layer,
-                           SubmitNodeCollector.CustomGeometryRenderer geometry) {
+    static void add(ExtractLevelRenderStateEvent event, PoseStack pose, MinecraftModelSource.Submission submission) {
         LevelRenderState state = event.getRenderState();
         List<Draw> draws = state.getRenderData(DRAWS);
         if (draws == null) {
             draws = new ArrayList<>();
             state.setRenderData(DRAWS, draws);
         }
-        draws.add(new Draw(new Matrix4f(pose.last().pose()), layer, geometry));
+        draws.add(new Draw(new Matrix4f(pose.last().pose()), submission));
     }
 
     @SubscribeEvent
@@ -45,12 +42,12 @@ public final class SceneGeometry {
             pose.pushPose();
             try {
                 pose.mulPose(draw.transform());
-                event.getSubmitNodeCollector().submitCustomGeometry(pose, draw.layer(), draw.geometry());
+                draw.submission().submit(pose, event.getSubmitNodeCollector());
             } finally {
                 pose.popPose();
             }
         }
     }
 
-    private record Draw(Matrix4f transform, RenderType layer, SubmitNodeCollector.CustomGeometryRenderer geometry) {}
+    private record Draw(Matrix4f transform, MinecraftModelSource.Submission submission) {}
 }
