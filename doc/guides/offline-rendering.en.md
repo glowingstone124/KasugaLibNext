@@ -62,13 +62,13 @@ After entering a world, first and third person each get their own window and the
 restores the previous setting afterwards; an ordinary API caller can set `mc.options.pauseOnLostFocus` itself.
 
 ```java
-import lib.kasuga.rendering.output.gl.FramePreviewWindow;
+import lib.kasuga.rendering.output.FrameWindowOptions;
 import lib.kasuga.rendering.output.mc.MinecraftFrameWindows;
 
 // Owns both the camera and the window: closing either this view's native window releases the camera.
 var windowCamera = MinecraftFrameWindows.createCamera("monitor:wide", () ->
         new WorldCameraView(100, 80, 100, 0, 20, 0, 70, 640, 360), settings,
-        new FramePreviewWindow.Options("Wide camera", 640, 360));
+        new FrameWindowOptions("Wide camera", 640, 360));
 windowCamera.pause();
 windowCamera.resume();
 windowCamera.resize(1280, 720);
@@ -76,9 +76,9 @@ windowCamera.close();
 
 // Owns only the window and a subscription: closing this window does not close the existing camera.
 var mirror = MinecraftFrameWindows.open("capture:wide",
-        new FramePreviewWindow.Options("Existing camera", 640, 360));
+        new FrameWindowOptions("Existing camera", 640, 360));
 var mainMonitor = MinecraftFrameWindows.open(MinecraftFrameOutputs.MAIN_VIEW,
-        new FramePreviewWindow.Options("Final MC + GUI", 640, 360));
+        new FrameWindowOptions("Final MC + GUI", 640, 360));
 mirror.close();
 mainMonitor.close();
 ```
@@ -88,7 +88,11 @@ last valid size is kept. Close events are handled every frame, and a paused came
 source camera view stops publishing, and the caller is responsible for closing it. Exiting MC releases the windows together and
 only then releases the main context.
 
-An auxiliary window uses a GL context with a shared texture, its own read FBO and a bidirectional GPU fence.
+In Minecraft 26.3, `MinecraftFrameWindows.open(viewId, options)` subscribes to published frames on Vulkan and OpenGL,
+including the main view and its GUI. The window uses an SDL presentation surface on Minecraft's device and fits each
+frame to the window's pixel size while preserving aspect ratio. The standalone world-camera `createCamera` API is still being ported to 26.3.
+
+On 1.21.1, an auxiliary window uses a GL context with a shared texture, its own read FBO and a bidirectional GPU fence.
 Presenting only copies the finished frame and adds no world rendering; a camera view captures once per frame and multiple
 subscribers share the read-only output FBO. Each auxiliary window still has its own context-local read FBO,
 which is only the read entry point onto the shared texture and does not allocate a separate output color texture.

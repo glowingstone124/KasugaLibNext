@@ -3,6 +3,7 @@ package lib.kasuga.core.rendering.mixin;
 import com.mojang.renderpearl.api.device.GpuSurface;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import lib.kasuga.rendering.output.mc.MinecraftFrameOutputs;
+import lib.kasuga.rendering.output.mc.MinecraftFrameWindows;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import org.spongepowered.asm.mixin.Final;
@@ -34,8 +35,15 @@ abstract class MinecraftFrameOutputMixin {
         return MinecraftFrameOutputs.blankPresentation(windowSurface, color);
     }
 
+    @Inject(method = "renderFrame", at = @At(value = "INVOKE", shift = At.Shift.AFTER,
+            target = "Lcom/mojang/renderpearl/api/commands/CommandEncoder;submit()V"))
+    private void kasuga$presentPreviewWindows(boolean advanceGameTime, CallbackInfo ci) {
+        MinecraftFrameWindows.presentSubmittedFrames();
+    }
+
     @Inject(method = "close", at = @At("HEAD"))
     private void kasuga$closeFrameOutputs(CallbackInfo ci) {
+        MinecraftFrameWindows.shutdown();
         MinecraftFrameOutputs.shutdown();
     }
 }

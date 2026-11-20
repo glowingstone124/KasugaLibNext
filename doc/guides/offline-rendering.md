@@ -63,13 +63,13 @@ DEBUG 预览为世界画面，不含第一人称手部或 HUD。打开菜单/背
 结束后恢复原设置；普通 API 调用方可自行设置 `mc.options.pauseOnLostFocus`。
 
 ```java
-import lib.kasuga.rendering.output.gl.FramePreviewWindow;
+import lib.kasuga.rendering.output.FrameWindowOptions;
 import lib.kasuga.rendering.output.mc.MinecraftFrameWindows;
 
 // 同时拥有相机和窗口：关闭任一该机位的原生窗口会释放这个 camera。
 var windowCamera = MinecraftFrameWindows.createCamera("monitor:wide", () ->
         new WorldCameraView(100, 80, 100, 0, 20, 0, 70, 640, 360), settings,
-        new FramePreviewWindow.Options("Wide camera", 640, 360));
+        new FrameWindowOptions("Wide camera", 640, 360));
 windowCamera.pause();
 windowCamera.resume();
 windowCamera.resize(1280, 720);
@@ -77,9 +77,9 @@ windowCamera.close();
 
 // 只拥有窗口和订阅：关闭这个窗口不会关闭现有相机。
 var mirror = MinecraftFrameWindows.open("capture:wide",
-        new FramePreviewWindow.Options("Existing camera", 640, 360));
+        new FrameWindowOptions("Existing camera", 640, 360));
 var mainMonitor = MinecraftFrameWindows.open(MinecraftFrameOutputs.MAIN_VIEW,
-        new FramePreviewWindow.Options("Final MC + GUI", 640, 360));
+        new FrameWindowOptions("Final MC + GUI", 640, 360));
 mirror.close();
 mainMonitor.close();
 ```
@@ -89,7 +89,11 @@ mainMonitor.close();
 源机位停止发布后保留最后画面，调用方负责关闭它。退出 MC 会统一释放窗口，
 之后才释放主 context。
 
-辅助窗口使用共享纹理的 GL context、自己的 read FBO 和双向 GPU fence。
+Minecraft 26.3 的 `MinecraftFrameWindows.open(viewId, options)` 可在 Vulkan 和 OpenGL 下订阅已发布的帧，
+包括主画面和 GUI。它使用 Minecraft 设备创建 SDL 呈现表面，并按副窗口的像素尺寸保留画面比例。
+26.3 的独立世界机位 `createCamera` 仍在移植中。
+
+1.21.1 的辅助窗口使用共享纹理的 GL context、自己的 read FBO 和双向 GPU fence。
 呈现只复制完成的画面，不增加世界渲染；同一机位每帧只捕获一次，多个
 订阅共享只读输出 FBO。每个辅助窗口仍有自己的 context-local read FBO，
 它只是挂接共享纹理的读取入口，不额外分配一份输出颜色纹理。

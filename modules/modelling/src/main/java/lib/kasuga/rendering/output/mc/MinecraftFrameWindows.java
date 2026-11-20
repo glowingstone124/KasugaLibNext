@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.output.FrameOutputMode;
+import lib.kasuga.rendering.output.FrameWindowOptions;
 import lib.kasuga.rendering.output.WorldCameraView;
 import lib.kasuga.rendering.output.camera.CameraHandle;
 import lib.kasuga.rendering.output.camera.CameraAnimationPlayer;
@@ -27,6 +28,19 @@ import java.util.function.Supplier;
 public final class MinecraftFrameWindows {
     private static final LinkedHashSet<WindowOutput> WINDOWS = new LinkedHashSet<>();
     private MinecraftFrameWindows() {}
+
+    public static WindowOutput open(String viewId, FrameWindowOptions options) {
+        return open(viewId, legacyOptions(options));
+    }
+
+    public static WindowCamera createCamera(String viewId, Supplier<WorldCameraView> pose,
+                                            CameraRenderSettings settings, FrameWindowOptions options) {
+        return createCamera(viewId, pose, settings, legacyOptions(options));
+    }
+
+    private static FramePreviewWindow.Options legacyOptions(FrameWindowOptions options) {
+        return new FramePreviewWindow.Options(options.title(), options.width(), options.height(), options.visible());
+    }
 
     /** Closing this window only detaches its subscription; it does not own the source camera. */
     public static WindowOutput open(String viewId, FramePreviewWindow.Options options) {

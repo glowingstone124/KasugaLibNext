@@ -33,6 +33,7 @@ public final class PostProcessContext {
     private static final RenderPipeline COPY_RGBA8 = copyPipeline(GpuFormat.RGBA8_UNORM);
     private static final RenderPipeline COPY_RGBA16 = copyPipeline(GpuFormat.RGBA16_FLOAT);
     private static final RenderPipeline COPY_RGBA32 = copyPipeline(GpuFormat.RGBA32_FLOAT);
+    private static final Optional<Vector4fc> OPAQUE_BLACK = Optional.of(new Vector4f(0, 0, 0, 1));
 
     private final RenderTarget mainTarget;
     private final PostProcessTargetPool pool;
@@ -79,14 +80,27 @@ public final class PostProcessContext {
     }
 
     public void copyColor(RenderTarget source, int sourceIndex, RenderTarget destination, int destinationIndex, boolean linearFilter) {
+        copyColor(color(source, sourceIndex), color(destination, destinationIndex), linearFilter);
+    }
+
+    /** Copies or resamples a borrowed single-level color view into a renderable color view. */
+    public static void copyColor(GpuTextureView from, GpuTextureView to, boolean linearFilter) {
+        copyColor(from, to, linearFilter, false);
+    }
+
+    /** Fits the source inside the destination while preserving aspect ratio and filling unused pixels with black. */
+    public static void fitColor(GpuTextureView from, GpuTextureView to) {
+        copyColor(from, to, true, true);
+    }
+
+    private static void copyColor(GpuTextureView from, GpuTextureView to, boolean linearFilter, boolean fit) {
         RenderSystem.assertOnRenderThread();
-        GpuTextureView from = color(source, sourceIndex);
-        GpuTextureView to = color(destination, destinationIndex);
         if (from.texture() == to.texture()) throw new IllegalArgumentException("Cannot copy a color attachment into itself");
         GpuFormat format = to.texture().getFormat();
-        if (source.width == destination.width && source.height == destination.height && from.texture().getFormat() == format) {
+        if (from.baseMipLevel() == 0 && to.baseMipLevel() == 0 && from.texture().getFormat() == format
+                && from.getWidth(0) == to.getWidth(0) && from.getHeight(0) == to.getHeight(0)) {
             RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(from.texture(), to.texture(),
-                    0, 0, 0, 0, 0, destination.width, destination.height);
+                    0, 0, 0, 0, 0, to.getWidth(0), to.getHeight(0));
             return;
         }
         RenderPipeline pipeline;
@@ -95,8 +109,35 @@ public final class PostProcessContext {
         else if (format == GpuFormat.RGBA32_FLOAT) pipeline = COPY_RGBA32;
         else throw new IllegalArgumentException("Unsupported color copy destination format: " + format);
         FilterMode filter = linearFilter ? FilterMode.LINEAR : FilterMode.NEAREST;
-        RenderPassDescriptor.Builder pass = RenderPassDescriptor.builder(() -> "Kasuga color copy").withColorAttachment(to);
-        draw(pass, RenderSystem.getCompiledPipeline(pipeline), bindings -> bindings.setUniform("SourceSampler", from, RenderSystem.getSamplerCache().getClampToEdge(filter)));
+        int targetWidth = to.getWidth(0);
+        int targetHeight = to.getHeight(0);
+        int width = targetWidth;
+        int height = targetHeight;
+        if (fit) {
+            double scale = Math.min((double) targetWidth / from.getWidth(0), (double) targetHeight / from.getHeight(0));
+            width = Math.max(1, (int) Math.round(from.getWidth(0) * scale));
+            height = Math.max(1, (int) Math.round(from.getHeight(0) * scale));
+        }
+        RenderPassDescriptor.Builder pass = RenderPassDescriptor.builder(() -> "Kasuga color copy");
+        if (width == targetWidth && height == targetHeight) {
+            pass.withColorAttachment(to);
+            draw(pass, RenderSystem.getCompiledPipeline(pipeline), bindings -> bindCopySource(bindings, from, filter));
+            return;
+        }
+        pass.withColorAttachment(to, OPAQUE_BLACK);
+        int viewportWidth = width;
+        int viewportHeight = height;
+        int x = (targetWidth - viewportWidth) / 2;
+        int y = (targetHeight - viewportHeight) / 2;
+        draw(pass, RenderSystem.getCompiledPipeline(pipeline), bindings -> {
+            bindings.setViewport(x, y, viewportWidth, viewportHeight);
+            bindings.enableScissor(x, y, viewportWidth, viewportHeight);
+            bindCopySource(bindings, from, filter);
+        });
+    }
+
+    private static void bindCopySource(RenderPass pass, GpuTextureView source, FilterMode filter) {
+        pass.setUniform("SourceSampler", source, RenderSystem.getSamplerCache().getClampToEdge(filter));
     }
 
     public void copyDepth(RenderTarget source, RenderTarget destination) {

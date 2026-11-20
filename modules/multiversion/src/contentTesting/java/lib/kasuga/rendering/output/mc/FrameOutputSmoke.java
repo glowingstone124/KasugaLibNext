@@ -7,14 +7,21 @@ import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
+import lib.kasuga.rendering.effect.post.PostProcessContext;
 import lib.kasuga.rendering.output.FrameOutputMode;
 import lib.kasuga.rendering.output.FrameOutputRouter;
 import lib.kasuga.rendering.output.OutputFrame;
+import lib.kasuga.rendering.output.FrameWindowOptions;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import org.joml.Vector4f;
+import org.lwjgl.sdl.SDLEvents;
+import org.lwjgl.sdl.SDLVideo;
+import org.lwjgl.sdl.SDL_Event;
+import org.lwjgl.system.MemoryStack;
 
 /** Exercises real presentation and readback after the other screenshot tests finish. */
 public final class FrameOutputSmoke {
@@ -23,7 +30,14 @@ public final class FrameOutputSmoke {
     private static FrameOutputRouter<GpuTextureView>.Registration mirror;
     private static FrameOutputRouter<GpuTextureView>.Registration exclusive;
     private static OutputFrame<GpuTextureView> current;
+    private static MinecraftFrameWindows.WindowOutput preview;
+    private static MinecraftFrameWindows.WindowOutput secondPreview;
+    private static int[] initialSize;
+    private static long beforeResize;
+    private static boolean closeSent;
+    private static int closedWindowId;
     private static boolean sampled;
+    private static boolean fitted;
     private static boolean finished;
     private static RuntimeException failure;
     private static int frames;
@@ -51,6 +65,11 @@ public final class FrameOutputSmoke {
         if (frames < 3) return;
         if (mirror == null) {
             verifyCustomView();
+            verifyFittedCopy();
+            preview = MinecraftFrameWindows.open(MinecraftFrameOutputs.MAIN_VIEW,
+                    new FrameWindowOptions("Kasuga Frame Output Smoke", 320, 180));
+            secondPreview = MinecraftFrameWindows.open(MinecraftFrameOutputs.MAIN_VIEW,
+                    new FrameWindowOptions("Kasuga Second Frame Output Smoke", 300, 160));
             mirror = MinecraftFrameOutputs.open(FrameOutputMode.MIRROR, frame -> {
                 current = frame;
                 if (++mirrorFrames == 1) readGuiPixel(frame);
@@ -68,7 +87,7 @@ public final class FrameOutputSmoke {
             return;
         }
         require(!mirror.isClosed() && !exclusive.isClosed(), "Frame router detached a smoke subscriber");
-        if (!sampled || exclusiveFrames < 3) return;
+        if (!sampled || !fitted || exclusiveFrames < 3 || !verifyPreviewWindows(client)) return;
         exclusive.close();
         require(!current.resource().isClosed(), "Closing one consumer retired a shared snapshot");
         mirror.close();
@@ -78,6 +97,69 @@ public final class FrameOutputSmoke {
         LogUtils.getLogger().info("KASUGA_FRAME_OUTPUT_PASS final-gui,shared,exclusive,retired,custom-view,resize");
         finished = true;
         client.stop();
+    }
+
+    private static boolean verifyPreviewWindows(Minecraft client) throws Exception {
+        if (beforeResize == 0) {
+            if (preview.presentedFrames() < 3 || secondPreview.presentedFrames() < 3) return false;
+            require(preview.windowHandle() != client.getWindow().handle()
+                            && preview.windowHandle() != secondPreview.windowHandle(), "Expected distinct SDL windows");
+            if ((SDLVideo.SDL_GetWindowFlags(client.getWindow().handle()) & SDLVideo.SDL_WINDOW_OPENGL) != 0) {
+                require(SDLVideo.SDL_GL_GetCurrentWindow() == client.getWindow().handle(), "GL drawable was not restored");
+            }
+            initialSize = preview.framebufferSize();
+            beforeResize = preview.presentedFrames();
+            preview.resize(480, 270);
+            return false;
+        }
+        if (!closeSent) {
+            int[] resized = preview.framebufferSize();
+            if (resized[0] <= initialSize[0] || resized[1] <= initialSize[1] || preview.presentedFrames() < beforeResize + 3) {
+                return false;
+            }
+            closedWindowId = SDLVideo.SDL_GetWindowID(preview.windowHandle());
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                SDL_Event event = SDL_Event.calloc(stack);
+                event.type(SDLEvents.SDL_EVENT_WINDOW_CLOSE_REQUESTED);
+                event.window().windowID(closedWindowId);
+                require(SDLEvents.SDL_PushEvent(event), "Could not push SDL close request");
+            }
+            closeSent = true;
+            return false;
+        }
+        if (!preview.isClosed()) return false;
+        require(SDLVideo.SDL_GetWindowFromID(closedWindowId) == 0, "Closing did not destroy the native window");
+        require(!secondPreview.isClosed() && secondPreview.presentedFrames() > beforeResize,
+                "Closing one preview interrupted the other");
+        secondPreview.close();
+        require(secondPreview.isClosed(), "Explicit close did not release the second window");
+        LogUtils.getLogger().info("KASUGA_FRAME_WINDOW_PASS backend={} two-surfaces,aspect-fit-pixels,resize,restored,close-event,explicit-close",
+                RenderSystem.getDevice().getDeviceInfo().backendName());
+        return true;
+    }
+
+    private static void verifyFittedCopy() {
+        TextureTarget source = new TextureTarget("Preview fit source", 24, 12, GpuFormat.RGBA8_UNORM, null);
+        TextureTarget fitted = new TextureTarget("Preview fit destination", 48, 48, GpuFormat.RGBA8_UNORM, null);
+        try {
+            RenderSystem.getDevice().createCommandEncoder().clearColorTexture(source.getColorTexture(),
+                    new Vector4f(1, 0, 1, 1));
+            PostProcessContext.fitColor(source.getColorTextureView(), fitted.getColorTextureView());
+            Screenshot.takeScreenshot(fitted, pixels -> {
+                try (pixels) {
+                    require(pixels.getPixel(1, 1) == 0xff000000 && pixels.getPixel(46, 46) == 0xff000000,
+                            "Preview fit did not clear the letterbox bars");
+                    require(pixels.getPixel(1, 12) == 0xffff00ff && pixels.getPixel(46, 35) == 0xffff00ff,
+                            "Preview fit did not preserve the source aspect ratio");
+                    FrameOutputSmoke.fitted = true;
+                } catch (RuntimeException error) {
+                    failure = error;
+                }
+            });
+        } finally {
+            fitted.destroyBuffers();
+            source.destroyBuffers();
+        }
     }
 
     private static void verifyCustomView() throws Exception {
