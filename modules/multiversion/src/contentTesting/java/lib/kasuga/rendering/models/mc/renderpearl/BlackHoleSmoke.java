@@ -3,7 +3,6 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
-import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.effect.builtin.blackhole.BlackHoleEffect;
 import lib.kasuga.rendering.effect.builtin.blackhole.BlackHoleEffects;
 import lib.kasuga.rendering.effect.post.graph.PostProcessGraphRegistry;
@@ -136,7 +135,6 @@ final class BlackHoleSmoke {
                 client.getTextureManager().release(TEXTURE);
                 finished = true;
                 LogUtils.getLogger().info("KASUGA_BLACK_HOLE_PASS generated-shader,reverse-depth,update,replacement,close,demo-disk,demo-depth");
-                DocumentSmoke.start(client);
             }
         }
         frames = 0;

@@ -53,6 +53,8 @@ preset.inject(source, 4.5f, new Vector3f(0, 0.18f, 0));
 smoke.add(preset.createTracer(position, scale, color));
 ```
 
+On Minecraft 26.3, register `new RenderPearlParticleBatchRenderer(mesh)` as the batch renderer. Use `RenderPhase.AFTER_PARTICLES` with classic transparency or `RenderPhase.OIT_TRANSLUCENT` with improved transparency. The renderer uploads transforms and colors before the native pass begins, then draws the mesh with hardware instancing. Use `sortBackToFront(true)` for conventional alpha blending.
+
 The following example combines physics and appearance operators in a placeable cube-smoke source:
 
 ```java

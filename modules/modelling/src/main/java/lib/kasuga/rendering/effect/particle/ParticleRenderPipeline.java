@@ -9,6 +9,8 @@ import lib.kasuga.rendering.effect.pipeline.RenderPipelineDescriptor;
 import lib.kasuga.rendering.models.uml.math.Transform;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4fc;
 
 import java.util.List;
 import java.util.Objects;
@@ -30,6 +32,7 @@ public final class ParticleRenderPipeline implements PipelineRegistration {
     private volatile int lastVisibleCount;
     private volatile long lastRenderNanos;
     private volatile boolean sortBackToFront;
+    private ParticleInstanceBuffer preparedInstances;
 
     private ParticleRenderPipeline(ResourceLocation owner, RenderPipelineDescriptor descriptor,
                                    DuplicatePolicy duplicatePolicy, ParticleBatchRenderer renderer) {
@@ -131,12 +134,13 @@ public final class ParticleRenderPipeline implements PipelineRegistration {
     }
 
     public void clear() {
+        preparedInstances = null;
         group.clear();
     }
 
     void clearWorldState() {
         clearSources();
-        group.clear();
+        clear();
     }
 
     void update(ClientLevel level) {
@@ -146,30 +150,39 @@ public final class ParticleRenderPipeline implements PipelineRegistration {
         group.update(level);
     }
 
+    void prepareFrame(Vec3 eye, Matrix4fc viewRotation) {
+        preparedInstances = null;
+        if (!(renderer instanceof ParticleBatchRenderer.Prepared prepared) || !isActive()) return;
+        ParticleInstanceBuffer visible = collect(eye);
+        if (visible.isEmpty()) return;
+        prepared.prepare(visible, eye, viewRotation);
+        preparedInstances = visible;
+    }
+
     private void render(WorldRenderPipelineContext context) {
         if (closed.get()) return;
-        instances.beginWrite();
-        group.writeVisible(instances);
-        lastVisibleCount = instances.size();
-        if (instances.isEmpty()) {
+        long started = System.nanoTime();
+        ParticleInstanceBuffer visible = renderer instanceof ParticleBatchRenderer.Prepared
+                ? preparedInstances : collect(context.camera().getPosition());
+        if (visible == null || visible.isEmpty()) {
             lastRenderNanos = 0;
             return;
         }
-        long started = System.nanoTime();
         try {
-            ParticleInstanceBuffer renderInstances = instances;
-            if (sortBackToFront && instances.size() > 1) {
-                var camera = context.camera().getPosition();
-                depthSorter.sortBackToFront(
-                        instances, (float) camera.x, (float) camera.y, (float) camera.z
-                );
-                depthSortedInstances.copyFrom(instances, depthSorter);
-                renderInstances = depthSortedInstances;
-            }
-            renderer.render(renderInstances, context);
+            renderer.render(visible, context);
         } finally {
             lastRenderNanos = System.nanoTime() - started;
         }
+    }
+
+    private ParticleInstanceBuffer collect(Vec3 eye) {
+        instances.beginWrite();
+        group.writeVisible(instances);
+        lastVisibleCount = instances.size();
+        if (!sortBackToFront || instances.size() <= 1) return instances;
+        depthSorter.sortBackToFront(instances, (float) eye.x, (float) eye.y, (float) eye.z);
+        depthSortedInstances.copyFrom(instances, depthSorter);
+        return depthSortedInstances;
     }
 
     private void requireOpen() {
@@ -198,18 +211,14 @@ public final class ParticleRenderPipeline implements PipelineRegistration {
         return descriptor;
     }
 
-    @Override
-    public CompiledRenderPipeline compiledPipeline() {
-        return registration.compiledPipeline();
-    }
+    @Override public CompiledRenderPipeline compiledPipeline() { return registration.compiledPipeline(); }
 
     @Override
     public void close() {
         if (!closed.compareAndSet(false, true)) return;
         ClientParticleRuntime.remove(this);
         registration.close();
-        clearSources();
-        group.clear();
+        clearWorldState();
         renderer.close();
     }
 }

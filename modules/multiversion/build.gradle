@@ -93,6 +93,12 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/rendering/effect/RenderRegistration.java',
                 'lib/kasuga/rendering/effect/PipelineRegistryCore.java',
                 'lib/kasuga/rendering/effect/WorldRenderPipeline.java',
+                'lib/kasuga/rendering/effect/EffectHandle.java',
+                'lib/kasuga/rendering/effect/EffectRenderer.java',
+                'lib/kasuga/rendering/effect/RenderEffect.java',
+                'lib/kasuga/rendering/effect/EffectRenderPipeline.java',
+                'lib/kasuga/rendering/effect/ClientEffectRuntime.java',
+                'lib/kasuga/rendering/effect/particle/**',
                 'lib/kasuga/rendering/effect/builtin/blackhole/BlackHoleEffect.java',
                 'lib/kasuga/rendering/effect/builtin/blackhole/BlackHoleShaderProvider.java',
                 'lib/kasuga/rendering/effect/post/PostProcessTargetDescriptor.java',
@@ -104,10 +110,18 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/rendering/effect/post/graph/PostProcessGraphTarget.java'
         exclude 'lib/kasuga/rendering/models/mc/dynamic/fsm/AnimationBlockEntity.java',
                 'lib/kasuga/rendering/models/mc/dynamic/fsm/KasugaModelPipelines.java',
-                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/je/JETextureLayer.java'
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/je/JETextureLayer.java',
+                'lib/kasuga/rendering/effect/particle/instance/opengl/**'
     }
     filter { String line ->
+        // The 26.3 host supplies a native RenderPass and graph-owned targets.
+        if (line.contains('import lib.kasuga.rendering.effect.pipeline.CompiledRenderPipeline;') ||
+                line.contains('public CompiledRenderPipeline compiledPipeline()') ||
+                line.contains('PostProcessTargetPool.getInstance().clear()') ||
+                line.contains('import lib.kasuga.rendering.effect.post.PostProcessTargetPool;')) return null
         updateMinecraftNames(line).replace('new ChunkPos(pos)', 'ChunkPos.containing(pos)')
+                .replace('context.camera().getPosition()', 'context.camera().pos')
+                .replace('context.partialTick().getGameTimeDeltaPartialTick(false)', 'context.partialTick()')
     }
     into(layout.buildDirectory.dir('generated/sources/models/java'))
 }

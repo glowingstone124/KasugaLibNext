@@ -1,8 +1,11 @@
 package lib.kasuga.rendering.effect.particle;
 
+import com.mojang.logging.LogUtils;
 import lib.kasuga.rendering.effect.DuplicatePolicy;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4fc;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -36,6 +39,16 @@ public final class ClientParticleRuntime {
 
     static synchronized void remove(ParticleRenderPipeline pipeline) {
         PIPELINES.remove(pipeline);
+    }
+
+    public static void prepare(Vec3 eye, Matrix4fc viewRotation) {
+        for (ParticleRenderPipeline pipeline : PIPELINES) {
+            try {
+                pipeline.prepareFrame(eye, viewRotation);
+            } catch (RuntimeException failure) {
+                LogUtils.getLogger().error("Unable to prepare particle batch {}", pipeline.id(), failure);
+            }
+        }
     }
 
     @SubscribeEvent
