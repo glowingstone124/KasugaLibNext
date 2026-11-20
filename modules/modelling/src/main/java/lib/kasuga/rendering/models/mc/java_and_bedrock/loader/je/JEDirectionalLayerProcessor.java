@@ -20,7 +20,7 @@ public class JEDirectionalLayerProcessor extends Processor<Map.Entry<Direction, 
         JEFace face = entry.getValue();
         JEModelData modelData = (JEModelData) context.getData("modelData");
 
-        Material material = (Material) context.getData("material");
+        Material material = JETextureLayer.materialFor(face.getTexture(), context);
 
         Vector2f uvOrg = new Vector2f(face.getUvFrom()).div(16f);
         Vector2f uvSize = new Vector2f(face.getUvTo()).sub(face.getUvFrom()).div(16f);

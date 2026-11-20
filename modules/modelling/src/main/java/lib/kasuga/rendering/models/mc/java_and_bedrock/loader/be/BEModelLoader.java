@@ -1,35 +1,20 @@
 package lib.kasuga.rendering.models.mc.java_and_bedrock.loader.be;
 
 import com.google.gson.JsonObject;
-import lib.kasuga.rendering.models.mc.Constants;
-import lib.kasuga.rendering.models.mc.backend.RenderState;
-import lib.kasuga.rendering.models.mc.java_and_bedrock.IdentifierHelper;
-import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCMeshData;
-import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCTextureData;
 import lib.kasuga.rendering.models.mc.java_and_bedrock.loader.TextureLayer;
-import lib.kasuga.rendering.models.mc.source.texture.KasugaTextureManager;
-import lib.kasuga.rendering.models.uml.loaders.MaterialSetBuilder;
 import lib.kasuga.rendering.models.uml.loaders.SkeletonBuilder;
-import lib.kasuga.rendering.models.uml.loaders.sources.SourceManager;
 import lib.kasuga.rendering.models.uml.loaders.structural.Loader;
 import lib.kasuga.rendering.models.uml.math.binding.BoneBindingFunc;
 import lib.kasuga.rendering.models.uml.structure.Model;
 import lib.kasuga.rendering.models.uml.structure.basic.BoneBinding;
 import lib.kasuga.rendering.models.uml.structure.basic.Mesh;
 import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
-import lib.kasuga.rendering.models.uml.structure.basic.data.BoneBindingData;
-import lib.kasuga.rendering.models.uml.structure.basic.data.vertex.VertexData;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
-import lib.kasuga.rendering.models.uml.structure.material.data.TextureData;
 import lib.kasuga.rendering.models.uml.structure.skeleton.Bone;
 import lib.kasuga.rendering.models.uml.structure.skeleton.Skeleton;
-import lib.kasuga.rendering.models.uml.structure.skeleton.data.AnchorData;
-import lib.kasuga.rendering.models.uml.structure.skeleton.data.BoneData;
-import lib.kasuga.rendering.models.uml.structure.skeleton.data.SkeletonData;
 import lib.kasuga.rendering.models.uml.util.MeshMode;
 import lib.kasuga.structure.Pair;
 import lombok.Getter;
-import net.minecraft.client.resources.model.Material;
 import net.minecraft.resources.ResourceLocation;
 
 import java.util.*;

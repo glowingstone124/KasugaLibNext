@@ -63,12 +63,13 @@ public final class RenderPearlClientSmoke {
     private static Lighting lighting = Lighting.BASELINE;
     private static double baselineRed;
     private static int modelPixels;
+    private static double bedrockRestX;
 
     enum Lighting {
         BASELINE(false), POINT(true), AREA(true), VOLUME(true), OCCLUDED(false), CLEARED(false),
         SCENE_LIT(true), SCENE_MOVED(false), SCENE_HIDDEN(false), SCENE_SHOWN(true), SCENE_CLOSED(false),
         LOCATOR_LIT(true), LOCATOR_BONE_MOVED(false), LOCATOR_RESTORED(true), LOCATOR_CLOSED(false),
-        EMBEDDED_TEXTURE(false), OBJ_MATERIAL(false);
+        EMBEDDED_TEXTURE(false), OBJ_MATERIAL(false), JAVA_JSON(false), BEDROCK_JSON(false), BEDROCK_POSED(false);
 
         final boolean lit;
 
@@ -212,6 +213,19 @@ public final class RenderPearlClientSmoke {
                     if (!objCutoutAtCenter(image)) {
                         throw new IllegalStateException("OBJ diffuse texture or its cutout is missing from " + path);
                     }
+                } else if (captured == Lighting.JAVA_JSON) {
+                    if (nativeTexture(image, false).count() < 500 || nativeTexture(image, true).count() < 500) {
+                        throw new IllegalStateException("Java Edition model did not render both inherited face textures in " + path);
+                    }
+                } else if (captured == Lighting.BEDROCK_JSON || captured == Lighting.BEDROCK_POSED) {
+                    PixelSample sample = nativeTexture(image, false);
+                    if (sample.count() < 500) throw new IllegalStateException("Bedrock geometry is missing from " + path);
+                    if (captured == Lighting.BEDROCK_JSON) {
+                        if (!objCutoutAtCenter(image)) throw new IllegalStateException("Bedrock texture cutout failed in " + path);
+                        bedrockRestX = sample.centerX();
+                    } else if (Math.abs(sample.centerX() - bedrockRestX) < 30) {
+                        throw new IllegalStateException("Bedrock bone did not move the rendered geometry in " + path);
+                    }
                 } else if (!captured.lit) {
                     if (Math.abs(red - baselineRed) > 8 || matching < 100) {
                         throw new IllegalStateException(captured + " changed model colors at " + path);
@@ -223,7 +237,7 @@ public final class RenderPearlClientSmoke {
                 throw new IllegalStateException("Could not save RenderPearl smoke capture", failure);
             }
             client.execute(() -> {
-                if (captured == Lighting.OBJ_MATERIAL) {
+                if (captured == Lighting.BEDROCK_POSED) {
                     LOGGER.info("KASUGA_RENDERPEARL_PASS backend={} modelPixels={}",
                             RenderSystem.getDevice().getDeviceInfo().backendName(), modelPixels);
                     LOGGER.info("KASUGA_WORLD_LIGHTS_PASS point,area,volume,occluded,closed");
@@ -231,6 +245,7 @@ public final class RenderPearlClientSmoke {
                     LOGGER.info("KASUGA_BLOCKBENCH_LIGHT_PASS native-locator,bone-move,restored,closed");
                     LOGGER.info("KASUGA_BLOCKBENCH_TEXTURE_PASS embedded-png");
                     LOGGER.info("KASUGA_OBJ_PASS resource-pack,sibling-mtl,namespaced-diffuse,cutout");
+                    LOGGER.info("KASUGA_NATIVE_JSON_PASS java-parent,face-textures,implicit-uv,bedrock-selection,locator,cutout,bone-pose");
                     scenes.close();
                     model.close();
                     client.getTextureManager().release(WHITE);
@@ -248,6 +263,27 @@ public final class RenderPearlClientSmoke {
             });
         });
     }
+
+    private static PixelSample nativeTexture(NativeImage image, boolean greenTexture) {
+        int count = 0;
+        long total = 0;
+        for (int y = image.getHeight() / 4; y < image.getHeight() * 3 / 4; y++) {
+            for (int x = image.getWidth() / 8; x < image.getWidth() * 7 / 8; x++) {
+                int pixel = image.getPixel(x, y);
+                int red = pixel >>> 16 & 255;
+                int green = pixel >>> 8 & 255;
+                int blue = pixel & 255;
+                boolean matches = greenTexture ? green > 80 && red * 2 < green && blue * 5 < green * 4
+                        : red > 100 && blue > 55 && green * 2 < red;
+                if (!matches) continue;
+                count++;
+                total += x;
+            }
+        }
+        return new PixelSample(count, count == 0 ? 0 : (double) total / count);
+    }
+
+    private record PixelSample(int count, double centerX) {}
 
     private static boolean objCutoutAtCenter(NativeImage image) {
         int centerX = image.getWidth() / 2;

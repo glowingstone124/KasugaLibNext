@@ -6,6 +6,7 @@ import lib.kasuga.rendering.lighting.LightSource;
 import lib.kasuga.rendering.models.mc.scene.display.WorldDisplayScene;
 import lib.kasuga.rendering.models.mc.scene.display.WorldLightTarget;
 import lib.kasuga.rendering.models.mc.typo.KsgObjLoader;
+import lib.kasuga.rendering.models.mc.typo.KsgMinecraftJsonLoader;
 import lib.kasuga.rendering.models.mc.typo.bbmodel.KsgBbModelLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.math.Transform;
@@ -25,6 +26,9 @@ final class SceneLightingSmoke implements AutoCloseable {
     private static final Identifier TEXTURED_MODEL = Identifier.fromNamespaceAndPath(KasugaLib.MODID,
             "models/components/emitter_smoke.bbmodel");
     private static final Identifier OBJ_MODEL = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "models/smoke/obj_probe.obj");
+    private static final Identifier JAVA_MODEL = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "models/smoke/native_java.json");
+    private static final Identifier BEDROCK_MODEL = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "models/smoke/native_bedrock.geo.json");
+    private static final Identifier BEDROCK_TEXTURE = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "textures/smoke/obj_probe.png");
     private static final String LOCATOR_BONE = "lamp_mount";
     private static final Vec3 LOCAL_LIGHT = new Vec3(6, -18, 0);
     private final SceneModels models;
@@ -35,6 +39,7 @@ final class SceneLightingSmoke implements AutoCloseable {
     private RenderPearlModelSource locator;
     private SceneModels.Entry locatorEntry;
     private SceneModels.Entry texturedEntry;
+    private RenderPearlModelSource bedrock;
     private RenderPearlClientSmoke.Lighting previous;
 
     SceneLightingSmoke(ClientLevel level, ModelInstance model, Identifier white) {
@@ -83,6 +88,20 @@ final class SceneLightingSmoke implements AutoCloseable {
                     texturedEntry.close();
                     texturedEntry = models.add(KsgObjLoader.open(OBJ_MODEL), Vec3.ZERO);
                 }
+                case JAVA_JSON -> {
+                    texturedEntry.close();
+                    texturedEntry = models.add(RenderPearlModelSource.open(JAVA_MODEL), Vec3.ZERO);
+                }
+                case BEDROCK_JSON -> {
+                    texturedEntry.close();
+                    bedrock = KsgMinecraftJsonLoader.openBedrock(BEDROCK_MODEL, "geometry.panel", BEDROCK_TEXTURE);
+                    if (bedrock.instance().getModel().getSkeleton().getAnchor("pointer") == null) {
+                        throw new IllegalStateException("Bedrock locator was not imported");
+                    }
+                    texturedEntry = models.add(bedrock, Vec3.ZERO);
+                }
+                case BEDROCK_POSED -> bedrock.instance().getSkeletonInstance()
+                        .transform("panel", new Transform().translate(.30f, 0, 0));
                 default -> {}
             }
             previous = phase;
@@ -93,8 +112,11 @@ final class SceneLightingSmoke implements AutoCloseable {
             locatorEntry.position(emitter.subtract(2, 1.5, 0));
         }
         if (texturedEntry != null) {
-            if (phase == RenderPearlClientSmoke.Lighting.OBJ_MATERIAL) {
-                texturedEntry.position(emitter).transform(new Matrix4f(orientation).scale(.6f));
+            if (phase.ordinal() >= RenderPearlClientSmoke.Lighting.OBJ_MATERIAL.ordinal()) {
+                Matrix4f placement = new Matrix4f(orientation).scale(.6f);
+                if (phase == RenderPearlClientSmoke.Lighting.JAVA_JSON) placement.translate(-.5f, -.5f, 0);
+                if (phase.ordinal() >= RenderPearlClientSmoke.Lighting.BEDROCK_JSON.ordinal()) placement.translate(0, -.5f, 0);
+                texturedEntry.position(emitter).transform(placement);
                 return;
             }
             Vector3f shift = orientation.transformDirection(new Vector3f(0, -.4f, 0));

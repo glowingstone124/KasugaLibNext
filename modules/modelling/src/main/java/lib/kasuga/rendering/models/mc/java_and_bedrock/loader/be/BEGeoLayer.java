@@ -1,19 +1,14 @@
 package lib.kasuga.rendering.models.mc.java_and_bedrock.loader.be;
 
 import com.google.gson.JsonObject;
-import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCTexture;
-import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCTextureData;
 import lib.kasuga.rendering.models.mc.java_and_bedrock.data.be.BEModelData;
+import lib.kasuga.rendering.models.mc.java_and_bedrock.loader.TextureLayer;
 import lib.kasuga.rendering.models.mc.util.ModelJson;
 import lib.kasuga.utils.json.JsonFieldPolicy.DefaultOnMismatch;
-import lib.kasuga.rendering.models.uml.loaders.MaterialSetBuilder;
-import lib.kasuga.rendering.models.uml.loaders.SpriteSetBuilder;
 import lib.kasuga.rendering.models.uml.loaders.structural.Context;
 import lib.kasuga.rendering.models.uml.loaders.structural.Layer;
 import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.structure.Pair;
-import net.minecraft.client.resources.model.Material;
-import org.joml.Vector2f;
 import org.joml.Vector3f;
 
 import java.util.HashMap;
@@ -37,27 +32,7 @@ public class BEGeoLayer extends Layer<JsonObject> {
         String formatVersion = (String) context.getData("format_version");
         boolean legacy = (Boolean) context.getData("legacy");
 
-        HashMap<String, Pair<Material, MCTextureData>> texturesMap =
-                (HashMap<String, Pair<Material, MCTextureData>>) context.getData("textures");
-        Pair<Material, MCTextureData> texture = texturesMap.get("root");
-        MCTexture rootTexture = new MCTexture(
-                "root", texture::getFirst,
-                textureWidth, textureHeight,
-                texture.getSecond());
-        MaterialSetBuilder builder = context.getLoader().getMaterialSetBuilder();
-        builder.registerTexture("root", rootTexture);
-        builder.beginMaterial()
-                .useTexture("root")
-                .addSpriteBuildingFunc((mtlb, sprb, mtl) -> {
-                    SpriteSetBuilder sprBuilder = (SpriteSetBuilder) sprb;
-                    sprBuilder.textureId("root")
-                            .rectangularUVs(new Vector2f(), new Vector2f(1f, 1f))
-                            .endSprite();
-                })
-                .endMaterial();
-        lib.kasuga.rendering.models.uml.structure.material.Material mat =
-                (lib.kasuga.rendering.models.uml.structure.material.Material) builder.getMaterials().getFirst();
-        context.setData("material", mat);
+        context.setData("material", TextureLayer.bindRoot(context, textureWidth, textureHeight));
 
         BEModelData modelData = new BEModelData(
                 identifier, formatVersion,
@@ -94,6 +69,6 @@ public class BEGeoLayer extends Layer<JsonObject> {
     private static final class Description {
         @DefaultOnMismatch String identifier = "";
         @DefaultOnMismatch Float textureWidth = 16f, textureHeight = 16f, visibleBoundsWidth = 3f, visibleBoundsHeight = 3f;
-        Vector3f visibleBoundsOffset;
+        @DefaultOnMismatch Vector3f visibleBoundsOffset = new Vector3f();
     }
 }

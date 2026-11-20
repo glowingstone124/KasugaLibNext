@@ -106,12 +106,13 @@ public final class RenderPearlWorldModels {
             }
             draws.add(new Draw(new Matrix4f(cameraRelative), batches));
         }
-        if (model.getModel().getModelData() instanceof ModelComponentsHolder components) {
-            for (ModelComponents.LightDefinition light : components.components().lights()) {
-                if (!light.enabled()) continue;
-                LightFrame frame = ModelLightPlacement.sample(model.getSkeletonInstance(), light, worldPlacement);
-                if (frame != null) WorldLights.addToFrame(event, frame);
-            }
+        if (!(model.getModel().getModelData() instanceof ModelComponentsHolder holder)) return;
+        ModelComponents components = holder.components();
+        if (components == null) return;
+        for (ModelComponents.LightDefinition light : components.lights()) {
+            if (!light.enabled()) continue;
+            LightFrame frame = ModelLightPlacement.sample(model.getSkeletonInstance(), light, worldPlacement);
+            if (frame != null) WorldLights.addToFrame(event, frame);
         }
     }
 

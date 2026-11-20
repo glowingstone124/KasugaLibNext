@@ -1,7 +1,6 @@
 package lib.kasuga.rendering.models.mc.java_and_bedrock.loader;
 
 import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCMeshData;
-import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCTextureData;
 import lib.kasuga.rendering.models.mc.util.Direction;
 import lib.kasuga.rendering.models.mc.util.box_layer.FaceInfo;
 import lib.kasuga.rendering.models.mc.util.box_layer.VertexCorner;
@@ -11,7 +10,6 @@ import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.structure.basic.Mesh;
 import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
 import lib.kasuga.rendering.models.uml.structure.material.Material;
-import lib.kasuga.rendering.models.uml.structure.material.Texture;
 import lib.kasuga.structure.Pair;
 import lombok.Getter;
 import lombok.Setter;

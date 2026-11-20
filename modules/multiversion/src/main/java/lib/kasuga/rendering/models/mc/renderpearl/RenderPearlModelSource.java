@@ -6,6 +6,10 @@ import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.models.mc.scene.LayerLayout;
 import lib.kasuga.rendering.models.mc.scene.ModelBounds;
 import lib.kasuga.rendering.models.mc.scene.display.WorldDisplayTarget;
+import lib.kasuga.rendering.models.mc.typo.KsgMinecraftJsonLoader;
+import lib.kasuga.rendering.models.mc.typo.KsgObjLoader;
+import lib.kasuga.rendering.models.mc.typo.bbmodel.KsgBbModelLoader;
+import lib.kasuga.rendering.models.mc.typo.gltf.KsgGltfLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.structure.Model;
 import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
@@ -23,6 +27,7 @@ import org.joml.Matrix4fc;
 import org.joml.Vector3f;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -61,6 +66,17 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
     /** Takes ownership of the model and releases its texture bindings on close. */
     public static RenderPearlModelSource own(ModelInstance model, Function<Texture, Identifier> textures, Runnable release) {
         return new RenderPearlModelSource(model, textures, release, true);
+    }
+
+    /** Opens model geometry and textures from the current resource pack stack. */
+    public static RenderPearlModelSource open(Identifier identifier) throws IOException {
+        String path = identifier.getPath();
+        if (path.endsWith(".bbmodel")) return KsgBbModelLoader.open(identifier);
+        if (path.endsWith(".gltf") || path.endsWith(".glb")) return KsgGltfLoader.open(identifier);
+        if (path.endsWith(".obj")) return KsgObjLoader.open(identifier);
+        if (path.endsWith(".geo.json")) return KsgMinecraftJsonLoader.openBedrock(identifier);
+        if (path.endsWith(".json")) return KsgMinecraftJsonLoader.openJava(identifier);
+        throw new IOException("Unsupported RenderPearl model format: " + identifier);
     }
 
     /** Creates a model instance and uploads any embedded textures it owns. */

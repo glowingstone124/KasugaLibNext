@@ -49,8 +49,23 @@ public class JEElement {
         JEElement build() {
             if (from == null || to == null) throw new IllegalArgumentException("Element must have both 'from' and 'to' fields");
             Map<Direction, JEFace> built = new HashMap<>();
-            faces.forEach((direction, face) -> built.put(Direction.fromString(direction), face.build()));
+            for (Map.Entry<String, JEFace.Input> entry : faces.entrySet()) {
+                Direction direction = Direction.fromString(entry.getKey());
+                JEFace.Input face = entry.getValue();
+                built.put(direction, face.uv == null ? face.build(defaultUv(direction)) : face.build());
+            }
             return new JEElement(from.div(16f), to.div(16f), built, rotation == null ? null : rotation.build());
+        }
+
+        private float[] defaultUv(Direction direction) {
+            return switch (direction) {
+                case DOWN -> new float[]{from.x, 16f - to.z, to.x, 16f - from.z};
+                case UP -> new float[]{from.x, from.z, to.x, to.z};
+                case NORTH -> new float[]{16f - to.x, 16f - to.y, 16f - from.x, 16f - from.y};
+                case SOUTH -> new float[]{from.x, 16f - to.y, to.x, 16f - from.y};
+                case WEST -> new float[]{from.z, 16f - to.y, to.z, 16f - from.y};
+                case EAST -> new float[]{16f - to.z, 16f - to.y, 16f - from.z, 16f - from.y};
+            };
         }
     }
 }

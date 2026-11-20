@@ -1,0 +1,26 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "left": "#left_skin",
+    "right": "#right_skin",
+    "particle": "#right"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [8, 16, 1],
+      "faces": {
+        "north": {"texture": "#left"},
+        "south": {"texture": "#left"}
+      }
+    },
+    {
+      "from": [8, 0, 0],
+      "to": [16, 16, 1],
+      "faces": {
+        "north": {"texture": "#right"},
+        "south": {"texture": "#right"}
+      }
+    }
+  ]
+}

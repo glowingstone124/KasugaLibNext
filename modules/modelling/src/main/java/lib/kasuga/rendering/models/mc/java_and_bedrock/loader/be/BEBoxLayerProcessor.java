@@ -2,7 +2,6 @@ package lib.kasuga.rendering.models.mc.java_and_bedrock.loader.be;
 
 import com.google.gson.JsonArray;
 import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCMeshData;
-import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCTextureData;
 import lib.kasuga.rendering.models.mc.java_and_bedrock.loader.CubeVerticesMapper;
 import lib.kasuga.rendering.models.mc.util.Direction;
 import lib.kasuga.rendering.models.mc.util.JsonHelper;

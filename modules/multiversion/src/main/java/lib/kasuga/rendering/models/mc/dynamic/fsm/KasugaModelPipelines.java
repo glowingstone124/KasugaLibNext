@@ -5,9 +5,6 @@ import lib.kasuga.KasugaLib;
 import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
 import lib.kasuga.rendering.models.mc.renderpearl.RenderPearlModelSource;
 import lib.kasuga.rendering.models.mc.renderpearl.RenderPearlWorldModels;
-import lib.kasuga.rendering.models.mc.typo.KsgObjLoader;
-import lib.kasuga.rendering.models.mc.typo.bbmodel.KsgBbModelLoader;
-import lib.kasuga.rendering.models.mc.typo.gltf.KsgGltfLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.math.Transform;
 import net.minecraft.client.Minecraft;
@@ -58,7 +55,7 @@ public final class KasugaModelPipelines {
             remove(instance);
             RenderPearlModelSource source = null;
             try {
-                source = open(model);
+                source = RenderPearlModelSource.open(model);
                 RenderPearlWorldModels.Mount mount = source.mount(level, placement.transform());
                 MODELS.put(instance, new Binding(model, level, source, mount));
                 return source.instance();
@@ -68,14 +65,6 @@ public final class KasugaModelPipelines {
                 LOGGER.warn("Could not open animated model {}", model, failure);
                 return null;
             }
-        }
-
-        private static RenderPearlModelSource open(Identifier identifier) throws IOException {
-            String path = identifier.getPath();
-            if (path.endsWith(".bbmodel")) return KsgBbModelLoader.open(identifier);
-            if (path.endsWith(".gltf") || path.endsWith(".glb")) return KsgGltfLoader.open(identifier);
-            if (path.endsWith(".obj")) return KsgObjLoader.open(identifier);
-            throw new IOException("Unsupported RenderPearl model format: " + identifier);
         }
 
         private static boolean isRendering(Identifier model, Identifier instance) {

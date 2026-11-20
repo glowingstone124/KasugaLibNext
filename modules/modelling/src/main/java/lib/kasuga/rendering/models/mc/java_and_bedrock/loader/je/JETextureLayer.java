@@ -103,4 +103,8 @@ public class JETextureLayer extends Layer<JEModelData> {
         }
         return value;
     }
+
+    static lib.kasuga.rendering.models.uml.structure.material.Material materialFor(String reference, Context context) {
+        return (lib.kasuga.rendering.models.uml.structure.material.Material) context.getData("material");
+    }
 }

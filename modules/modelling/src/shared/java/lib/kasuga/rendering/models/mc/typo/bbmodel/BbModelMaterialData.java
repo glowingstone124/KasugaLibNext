@@ -21,23 +21,6 @@ record BbModelMaterialData(MaterialAlphaMode alphaMode, float alphaCutoff) imple
     static final float DEFAULT_ALPHA_CUTOFF = 0.5f;
 
     static BbModelMaterialData from(@Nullable BufferedImage image) {
-        if (image == null) {
-            return new BbModelMaterialData(MaterialAlphaMode.OPAQUE, DEFAULT_ALPHA_CUTOFF);
-        }
-        boolean transparent = false;
-        for (int y = 0; y < image.getHeight(); y++) {
-            for (int x = 0; x < image.getWidth(); x++) {
-                int alpha = image.getRGB(x, y) >>> 24;
-                if (alpha == 255) continue;
-                transparent = true;
-                if (alpha != 0) {
-                    return new BbModelMaterialData(MaterialAlphaMode.BLEND, DEFAULT_ALPHA_CUTOFF);
-                }
-            }
-        }
-        return new BbModelMaterialData(
-                transparent ? MaterialAlphaMode.MASK : MaterialAlphaMode.OPAQUE,
-                DEFAULT_ALPHA_CUTOFF
-        );
+        return new BbModelMaterialData(MaterialAlphaMode.fromImage(image), DEFAULT_ALPHA_CUTOFF);
     }
 }

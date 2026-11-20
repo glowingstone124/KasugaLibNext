@@ -97,7 +97,8 @@ lights and the same evaluated bone pose as their geometry. See the
 [world-space light guide](doc/guides/world-lights.md).
 
 The `fsm_block` and `fsm_be` data-driven factories can bind `.bbmodel`, `.gltf`,
-`.glb`, and `.obj` models to a block entity. The server runs the state machine and
+`.glb`, `.obj`, Java block model JSON and Bedrock `.geo.json` to a block entity.
+The server runs the state machine and
 synchronizes transitions to the clients, which sample the bone pose through
 RenderPearl. Standalone glTF models can also be opened with `KsgGltfLoader.open`.
 Relative glTF buffer and texture references resolve from the model's resource
@@ -106,6 +107,11 @@ provides the shared FSM definitions and clips to both sides.
 Open a standalone OBJ scene node with `KsgObjLoader.open`. It resolves sibling
 MTL files and diffuse textures from resource packs, including texture cutouts
 and MTL dissolve.
+Use `RenderPearlModelSource.open` for a standalone scene node backed by any of
+these resource formats. Java block models resolve parent files and per-face
+texture aliases. Bedrock uses its first geometry by default.
+`KsgMinecraftJsonLoader.openBedrock` also accepts a geometry name and a texture
+override for files shared by multiple entities.
 
 Document items register typed components with `DocumentComponentReg`. Their
 first-person renderers submit page geometry and text through
@@ -133,7 +139,8 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_RENDERPEARL_PASS`, `KASUGA_WORLD_LIGHTS_PASS`,
 `KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`,
 `KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
-`KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, and `KASUGA_RPC_PASS`. Captures of the models,
+`KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, `KASUGA_RPC_PASS`, and
+`KASUGA_NATIVE_JSON_PASS`. Captures of the models,
 animation, lighting, and held documents are saved in the test game directory.
 
 Run the focused release gate with:

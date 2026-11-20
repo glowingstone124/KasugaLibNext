@@ -1,0 +1,7 @@
+{
+  "parent": "kasuga_lib:smoke/native_java_parent",
+  "textures": {
+    "left_skin": "kasuga_lib:smoke/obj_probe",
+    "right_skin": "minecraft:block/emerald_block"
+  }
+}

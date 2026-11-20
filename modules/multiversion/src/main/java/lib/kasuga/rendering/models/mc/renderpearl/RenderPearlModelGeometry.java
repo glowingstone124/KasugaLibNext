@@ -2,11 +2,13 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCMeshData;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.math.BoneContext;
 import lib.kasuga.rendering.models.uml.math.binding.BoneBindingFunc;
 import lib.kasuga.rendering.models.uml.structure.basic.Mesh;
 import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
+import lib.kasuga.rendering.models.uml.structure.basic.data.mesh.ColorizedMeshData;
 import lib.kasuga.rendering.models.uml.structure.material.Material;
 import lib.kasuga.rendering.models.uml.structure.material.Sprite;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
@@ -40,11 +42,21 @@ final class RenderPearlModelGeometry {
         for (Mesh mesh : model.getModel().getMeshes()) {
             Vertex[] vertices = mesh.getVertices();
             if (!mesh.isVisible() || vertices.length < 3) continue;
+            MCMeshData nativeFace = mesh.getData() instanceof MCMeshData data ? data : null;
+            if (nativeFace != null && !nativeFace.isVisible()) continue;
             for (Material material : mesh.getMaterials()) {
                 Surface surface = surfaces.computeIfAbsent(material, key -> surface(model, key, textures, light));
+                Vector4f color = surface.color();
+                if (mesh.getData() instanceof ColorizedMeshData tinted && tinted.getColor() != null) {
+                    color = new Vector4f(color).mul(tinted.getColor());
+                }
+                int faceLight = nativeFace != null && nativeFace.isEmissive()
+                        ? LightCoordsUtil.FULL_BRIGHT : surface.light();
                 List<Corner> group = groups.computeIfAbsent(surface.layer(), key -> new ArrayList<>());
                 List<Corner> face = new ArrayList<>(vertices.length);
-                for (Vertex vertex : vertices) face.add(corner(model, mesh, vertex, surface, boneContexts));
+                for (Vertex vertex : vertices) {
+                    face.add(corner(model, mesh, vertex, surface, color, faceLight, boneContexts));
+                }
                 appendFace(group, face);
                 if (!surface.sprite().culled && surface.layer().pipeline().isCull()) {
                     appendFace(group, face.reversed());
@@ -86,7 +98,7 @@ final class RenderPearlModelGeometry {
     }
 
     private static Corner corner(ModelInstance model, Mesh mesh, Vertex vertex, Surface surface,
-                                 List<BoneContext> boneContexts) {
+                                 Vector4f color, int light, List<BoneContext> boneContexts) {
         Vector3f position = new Vector3f();
         Vector3f normal = new Vector3f();
         Vector2f uv = new Vector2f();
@@ -108,7 +120,7 @@ final class RenderPearlModelGeometry {
         float v = sprite.flipV ? 1f - uv.y : uv.y;
         Vector2f mapped = new Vector2f(sprite.getUv0()).lerp(sprite.getUv1(), u)
                 .lerp(new Vector2f(sprite.getUv3()).lerp(sprite.getUv2(), u), v);
-        return new Corner(position, normal, mapped, surface.color(), surface.light());
+        return new Corner(position, normal, mapped, color, light);
     }
 
     record Batch(RenderType layer, List<Corner> corners) {

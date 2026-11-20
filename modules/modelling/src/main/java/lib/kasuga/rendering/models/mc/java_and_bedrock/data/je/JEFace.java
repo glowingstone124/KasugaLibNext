@@ -75,15 +75,21 @@ public class JEFace {
     @NonNullFields
     static final class Input {
         String texture, cullface;
-        float[] uv = new float[4];
+        float[] uv;
         @DefaultOnMismatch Integer tintindex = -1, rotation = 0;
         JEFace build() {
+            return build(new float[4]);
+        }
+
+        JEFace build(float[] defaultUv) {
             if (texture == null) throw new IllegalArgumentException("face texture must not be null");
-            if (uv == null || uv.length != 4) throw new IllegalArgumentException("Expected 4 uv values");
+            float[] coordinates = uv == null ? defaultUv : uv;
+            if (coordinates.length != 4) throw new IllegalArgumentException("Expected 4 uv values");
             if (rotation < 0 || rotation % 90 != 0 || rotation > 270)
                 throw new IllegalArgumentException("Invalid rotation " + rotation + ", only 0/90/180/270 allowed");
             Direction direction = cullface == null || cullface.isEmpty() ? null : Direction.fromString(cullface);
-            return new JEFace(texture, new Vector2f(uv[0], uv[1]), new Vector2f(uv[2], uv[3]), tintindex, direction, rotation);
+            return new JEFace(texture, new Vector2f(coordinates[0], coordinates[1]),
+                    new Vector2f(coordinates[2], coordinates[3]), tintindex, direction, rotation);
         }
     }
 }

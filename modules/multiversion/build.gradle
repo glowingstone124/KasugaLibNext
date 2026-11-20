@@ -75,18 +75,26 @@ def prepareRegistrationTemplates = tasks.register('prepareRegistrationTemplates'
     filter(updateMinecraftNames)
     into(templateDirectory)
 }
-def prepareAnimationSources = tasks.register('prepareAnimationSources', Sync) {
+def prepareModelSources = tasks.register('prepareModelSources', Sync) {
     from(rootProject.file('modules/modelling/src/main/java')) {
-        include 'lib/kasuga/rendering/models/mc/dynamic/fsm/**'
+        include 'lib/kasuga/rendering/models/mc/dynamic/fsm/**',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/data/be/**',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/data/je/**',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/data/MCMeshData.java',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/be/**',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/je/**',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/CubeVerticesMapper.java',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/MCMeshBuilder.java'
         exclude 'lib/kasuga/rendering/models/mc/dynamic/fsm/AnimationBlockEntity.java',
-                'lib/kasuga/rendering/models/mc/dynamic/fsm/KasugaModelPipelines.java'
+                'lib/kasuga/rendering/models/mc/dynamic/fsm/KasugaModelPipelines.java',
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/je/JETextureLayer.java'
     }
     filter { String line ->
         updateMinecraftNames(line).replace('new ChunkPos(pos)', 'ChunkPos.containing(pos)')
     }
-    into(layout.buildDirectory.dir('generated/sources/animation/java'))
+    into(layout.buildDirectory.dir('generated/sources/models/java'))
 }
-sourceSets.main.java.srcDir(prepareAnimationSources)
+sourceSets.main.java.srcDir(prepareModelSources)
 sourceSets.main.java.srcDir(prepareRegistrationSources)
 sourceSets.main.java.srcDir(layout.buildDirectory.dir('generated/sources/codegen/java/main'))
 useGenerator(templates: templateDirectory, sources: [registrationDirectory],
@@ -126,6 +134,8 @@ dependencies {
     api(project(':modules:inject')) { transitive = false }
     bundledLibrary(project(':modules:inject')) { transitive = false }
     annotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
+    compileOnly 'org.projectlombok:lombok:1.18.42'
+    annotationProcessor 'org.projectlombok:lombok:1.18.42'
     contentTestingAnnotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
     api('io.micronaut:micronaut-inject:4.9.10') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
