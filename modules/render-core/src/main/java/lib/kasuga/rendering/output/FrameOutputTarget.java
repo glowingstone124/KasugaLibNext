@@ -1,5 +1,7 @@
 package lib.kasuga.rendering.output;
 
+import java.util.function.Consumer;
+
 /**
  * Owns destination storage and renders the final presentation into it, resizing
  * to the requested pixel dimensions. Must restore the backend's render target
@@ -9,4 +11,14 @@ package lib.kasuga.rendering.output;
  */
 public interface FrameOutputTarget<T> extends AutoCloseable {
     T capture(FrameBlitter blitter, int width, int height);
+
+    /** Gives an explicit destination to backends that record copies or render passes. */
+    interface Writable<T> extends FrameOutputTarget<T> {
+        T captureInto(Consumer<? super T> writer, int width, int height);
+
+        @Override
+        default T capture(FrameBlitter blitter, int width, int height) {
+            return captureInto(destination -> blitter.draw(width, height), width, height);
+        }
+    }
 }

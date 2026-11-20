@@ -2,6 +2,25 @@
 
 接口、配置和调用参考。原理说明见 [frame-output.md](../explanation/frame-output.md)。
 
+## Minecraft 26.3
+
+`MinecraftFrameOutputs` 在世界和 GUI 合成后发布主画面。Vulkan 和 OpenGL 上，同一视角的订阅者共享一份
+RGBA8 GPU 快照。`frame.resource()` 返回渲染线程上借用的 `GpuTextureView`。若要保留画面，可在回调中
+复制到自有 GPU 存储，或提交 RenderPearl 回读。下一帧可能覆盖快照，尺寸变化和最后一个订阅关闭都会释放旧纹理。
+
+```java
+var subscription = MinecraftFrameOutputs.open(FrameOutputMode.MIRROR, frame -> {
+    GpuTextureView color = frame.resource();
+    consumeTexture(color);
+});
+```
+
+有效的 `OFFSCREEN_ONLY` 订阅成功接收画面后，游戏窗口显示黑帧，窗口与交换链继续运行。关闭最后一个独占订阅后
+恢复游戏画面。自定义视角可在 render pass 结束后调用 `MinecraftFrameOutputs.publish(viewId, target)`，发布其
+RGBA8_UNORM `RenderTarget`。输出尺寸取自该目标。原版世界副相机和额外输出窗口仍需要各自的 26.3 适配器。
+
+## Minecraft 1.21.1
+
 `MinecraftFrameOutputs` 在 `Minecraft.runTick` 的最终
 `RenderTarget.blitToScreen(width, height)` 调用处路由画面。世界、后处理、
 HUD、GUI、加载界面及 FPS 调试面板已完成绘制；输出复用同一次原生最终

@@ -133,6 +133,8 @@ block entity renderers, with layer selection, exploded views and block picking.
 World UI uses native GUI canvases composited against world depth. Panels can
 follow a scene host and accept crosshair, free-cursor, and text input.
 See the [world UI reference](doc/reference/world-ui-input.en.md#minecraft-263).
+`MinecraftFrameOutputs` exports the final main view and completed custom views as
+RenderPearl textures. See the [frame output reference](doc/reference/frame-output.en.md#minecraft-263).
 Other custom rendering APIs are being ported.
 Integration modules whose upstream mods still target earlier Minecraft releases
 stay in the 1.21.1 build.
@@ -150,7 +152,7 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
 `KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, `KASUGA_RPC_PASS`,
 `KASUGA_NATIVE_JSON_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
-`KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, and `KASUGA_WORLD_UI_PASS`.
+`KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_UI_PASS`, and `KASUGA_FRAME_OUTPUT_PASS`.
 Captures of the models, animation, lighting, held documents, and GUI previews
 are saved in the test game directory.
 

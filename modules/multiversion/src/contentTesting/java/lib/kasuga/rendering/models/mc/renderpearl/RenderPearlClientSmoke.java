@@ -19,6 +19,7 @@ import lib.kasuga.rendering.models.uml.typo.gltf.GltfLoader;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfModelConverter;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import lib.kasuga.rendering.output.mc.FrameOutputSmoke;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.server.IntegratedServer;
@@ -183,10 +184,11 @@ public final class RenderPearlClientSmoke {
     }
 
     @SubscribeEvent
-    public static void afterFrame(RenderFrameEvent.Post event) {
+    public static void afterFrame(RenderFrameEvent.Post event) throws Exception {
         if (modelsVerified) {
             Minecraft client = Minecraft.getInstance();
-            if (WorldUiSmoke.started()) WorldUiSmoke.afterFrame(client);
+            if (FrameOutputSmoke.started()) FrameOutputSmoke.afterFrame(client);
+            else if (WorldUiSmoke.started()) WorldUiSmoke.afterFrame(client);
             else if (StructurePreviewSmoke.started()) StructurePreviewSmoke.afterFrame(client);
             else if (GuiPreviewSmoke.started()) GuiPreviewSmoke.afterFrame(client);
             else DocumentSmoke.afterFrame(client);

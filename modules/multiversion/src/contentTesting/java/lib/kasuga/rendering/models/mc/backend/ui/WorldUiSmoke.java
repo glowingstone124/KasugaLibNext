@@ -5,6 +5,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.rendering.models.mc.backend.GuiModelPreview;
 import lib.kasuga.rendering.models.mc.scene.MinecraftModelSources;
+import lib.kasuga.rendering.output.mc.FrameOutputSmoke;
 import lib.kasuga.scene.SceneHost;
 import lib.kasuga.scene.SceneModels;
 import lib.kasuga.scene.ScenePose;
@@ -165,7 +166,7 @@ public final class WorldUiSmoke {
                 panel.preview.close();
                 finished = true;
                 LOGGER.info("KASUGA_WORLD_UI_PASS canvas,scissor,text,pip,world-depth,keyboard,ime,pointer,drag,host-expiry");
-                client.stop();
+                FrameOutputSmoke.start(client);
             }
         }
         capturing = false;

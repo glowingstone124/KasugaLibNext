@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -68,10 +69,25 @@ public final class FrameOutputRouter<T> implements AutoCloseable {
     }
 
     public Delivery publish(String viewId, int width, int height, FrameBlitter blitter) {
+        Objects.requireNonNull(blitter, "blitter");
+        return publishFrame(viewId, width, height, target -> target.capture(blitter, width, height));
+    }
+
+    /** Publish by writing directly into a destination from a writable target factory. */
+    public Delivery publishInto(String viewId, int width, int height, Consumer<? super T> writer) {
+        Objects.requireNonNull(writer, "writer");
+        return publishFrame(viewId, width, height, target -> {
+            if (!(target instanceof FrameOutputTarget.Writable<T> writable)) {
+                throw new IllegalStateException("An explicit frame destination requires a writable target");
+            }
+            return writable.captureInto(writer, width, height);
+        });
+    }
+
+    private Delivery publishFrame(String viewId, int width, int height, Function<FrameOutputTarget<T>, T> capture) {
         checkThread.run();
         if (closed) throw new IllegalStateException("Frame output router is closed");
         if (publishing) throw new IllegalStateException("Recursive frame publication");
-        Objects.requireNonNull(blitter, "blitter");
         if (viewId == null || viewId.isBlank()) throw new IllegalArgumentException("A view ID is required");
         if (width <= 0 || height <= 0 || !hasOutputs(viewId)) return new Delivery(0, false, List.of());
         View view = views.get(viewId);
@@ -87,7 +103,7 @@ public final class FrameOutputRouter<T> implements AutoCloseable {
             OutputFrame<T> frame = null;
             try {
                 if (view.target == null) view.target = Objects.requireNonNull(view.factory.get(), "output target");
-                T resource = Objects.requireNonNull(view.target.capture(blitter, width, height), "output resource");
+                T resource = Objects.requireNonNull(capture.apply(view.target), "output resource");
                 frame = new OutputFrame<>(viewId, frameNumber, width, height, resource);
             } catch (Exception failure) {
                 failures.add(failure);
