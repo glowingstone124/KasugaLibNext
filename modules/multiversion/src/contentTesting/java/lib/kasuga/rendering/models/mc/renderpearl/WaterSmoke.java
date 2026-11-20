@@ -3,7 +3,6 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
-import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.effect.builtin.water.WaterEffects;
 import lib.kasuga.rendering.effect.builtin.water.WaterSurface;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
@@ -126,7 +125,6 @@ final class WaterSmoke {
                     client.getTextureManager().release(WHITE);
                     stage = Stage.DONE;
                     LogUtils.getLogger().info("KASUGA_WATER_PASS displacement,visible-water,foreground-depth,toggle,close");
-                    DocumentSmoke.start(client);
                 }
             }
             case DONE -> throw new IllegalStateException("Water smoke already completed");

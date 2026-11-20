@@ -8,6 +8,7 @@ import lib.kasuga.rendering.effect.WorldRenderPipelineContext;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
 
 /** A placeable, removable world effect. Tick ownership belongs to the existing effect runtime. */
 public final class CumulonimbusCloud implements RenderEffect, AutoCloseable {
@@ -27,16 +28,16 @@ public final class CumulonimbusCloud implements RenderEffect, AutoCloseable {
     @Override public boolean isAlive() { return volume.isAlive(); }
     @Override public boolean isVisible(WorldRenderPipelineContext context, float partialTick) {
         if (!CloudEffects.isEnabled()) return false;
-        var camera = context.camera().getPosition();
+        Vec3 camera = context.camera().getPosition();
         return volume.sample(partialTick).pose().isVisible(
-                new org.joml.Matrix4f(context.projectionMatrix()).mul(context.modelViewMatrix()), camera.x, camera.y, camera.z);
+                new Matrix4f(context.projectionMatrix()).mul(context.modelViewMatrix()), camera.x, camera.y, camera.z);
     }
     @Override public Vec3 position(float partialTick) {
-        var pose = volume.sample(partialTick).pose();
+        CloudPose pose = volume.sample(partialTick).pose();
         return new Vec3(pose.x(), pose.y() + pose.height() * .5, pose.z());
     }
     @Override public AABB bounds(float partialTick) {
-        var bounds = volume.sample(partialTick).pose().bounds();
+        CloudPose.Bounds bounds = volume.sample(partialTick).pose().bounds();
         return new AABB(bounds.minX(), bounds.minY(), bounds.minZ(), bounds.maxX(), bounds.maxY(), bounds.maxZ());
     }
     @Override public void close() { volume.close(); }

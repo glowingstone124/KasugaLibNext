@@ -3,6 +3,7 @@ package lib.kasuga.rendering.effect;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import lib.kasuga.rendering.effect.pipeline.RenderPipelineDescriptor;
+import lib.kasuga.rendering.effect.pipeline.WorldProjection;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.oit.OitStage;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
@@ -18,6 +19,7 @@ public record WorldRenderPipelineContext(
         @Nullable OitStage oitStage
 ) {
     public PoseStack poseStack() { return event.getPoseStack(); }
+    public Matrix4fc projectionMatrix() { return WorldProjection.current(); }
     public Matrix4fc modelViewMatrix() { return event.getModelViewMatrix(); }
     public CameraRenderState camera() { return event.getLevelRenderState().cameraRenderState; }
     public Frustum frustum() { return camera().cullFrustum; }

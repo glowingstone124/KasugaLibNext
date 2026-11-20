@@ -29,6 +29,12 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
 }
 
+tasks.named('processResources', ProcessResources) {
+    from(rootProject.file('modules/modelling/src/sharedResources')) {
+        include 'assets/kasuga_lib/shaders/include/cloud/density.glsl'
+    }
+}
+
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 tasks.withType(Javadoc).configureEach { options.encoding = 'UTF-8' }
 

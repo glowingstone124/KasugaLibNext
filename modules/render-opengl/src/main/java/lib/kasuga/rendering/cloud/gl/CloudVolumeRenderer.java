@@ -117,7 +117,8 @@ public final class CloudVolumeRenderer implements AutoCloseable {
     private void initialize() {
         if (march != null) return;
         try {
-            String density = resource("density.glsl");
+            String density = resource("density.glsl").replace("// CLOUD_DENSITY_SHARED",
+                    resource("/assets/kasuga_lib/shaders/include/cloud/density.glsl"));
             march = new Program(resource("cumulonimbus.fsh").replace("// CLOUD_DENSITY", density));
             illuminate = new Program(resource("lighting.fsh").replace("// CLOUD_DENSITY", density));
             upsample = new Program(resource("upsample.fsh"));
@@ -140,7 +141,7 @@ public final class CloudVolumeRenderer implements AutoCloseable {
     }
 
     private static String resource(String name) {
-        try (var stream = CloudVolumeRenderer.class.getResourceAsStream(RESOURCE_ROOT + name)) {
+        try (var stream = CloudVolumeRenderer.class.getResourceAsStream(name.startsWith("/") ? name : RESOURCE_ROOT + name)) {
             if (stream == null) throw new IllegalStateException("Missing cloud shader " + name);
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException failure) { throw new IllegalStateException("Cannot read cloud shader " + name, failure); }
