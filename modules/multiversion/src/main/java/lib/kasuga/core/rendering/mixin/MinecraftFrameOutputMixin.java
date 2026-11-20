@@ -2,6 +2,7 @@ package lib.kasuga.core.rendering.mixin;
 
 import com.mojang.renderpearl.api.device.GpuSurface;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
+import lib.kasuga.rendering.output.mc.MinecraftCameras;
 import lib.kasuga.rendering.output.mc.MinecraftFrameOutputs;
 import lib.kasuga.rendering.output.mc.MinecraftFrameWindows;
 import net.minecraft.client.Minecraft;
@@ -43,6 +44,7 @@ abstract class MinecraftFrameOutputMixin {
 
     @Inject(method = "close", at = @At("HEAD"))
     private void kasuga$closeFrameOutputs(CallbackInfo ci) {
+        MinecraftCameras.shutdown();
         MinecraftFrameWindows.shutdown();
         MinecraftFrameOutputs.shutdown();
     }

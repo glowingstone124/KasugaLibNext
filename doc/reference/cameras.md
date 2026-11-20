@@ -1,5 +1,7 @@
 # Player / Free / Fixed Camera
 
+Minecraft 26.3 的 Vulkan 和 OpenGL 后端支持 `MinecraftCameras.createPlayer`。帧资源类型为 `GpuTextureView`。
+
 通用数据位于 `lib.kasuga.rendering.output.camera`，Minecraft 接入位于
 `lib.kasuga.rendering.output.mc`。原理见 [多机位与输出](../explanation/offline-rendering-and-multi-cam.md)。
 所有创建、控制和关闭操作在渲染线程执行。

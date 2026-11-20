@@ -1,5 +1,7 @@
 # Player / Free / Fixed Camera
 
+Minecraft 26.3 supports `MinecraftCameras.createPlayer` on Vulkan and OpenGL. Its frame resource type is `GpuTextureView`.
+
 The generic data lives in `lib.kasuga.rendering.output.camera`, and the Minecraft integration in
 `lib.kasuga.rendering.output.mc`. For the mechanics see [Multi-camera and output](../explanation/offline-rendering-and-multi-cam.md).
 All creation, control, and close operations run on the render thread.

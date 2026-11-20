@@ -12,6 +12,10 @@ import lib.kasuga.rendering.output.FrameOutputMode;
 import lib.kasuga.rendering.output.FrameOutputRouter;
 import lib.kasuga.rendering.output.OutputFrame;
 import lib.kasuga.rendering.output.FrameWindowOptions;
+import lib.kasuga.rendering.output.WorldCameraView;
+import lib.kasuga.rendering.output.camera.CameraHandle;
+import lib.kasuga.rendering.output.camera.CameraState;
+import lib.kasuga.rendering.output.camera.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -42,6 +46,9 @@ public final class FrameOutputSmoke {
     private static RuntimeException failure;
     private static int frames;
     private static int mirrorFrames;
+    private static CameraHandle playerCamera;
+    private static int playerFrames;
+    private static boolean playerResumed;
     private static int exclusiveFrames;
 
     private FrameOutputSmoke() {}
@@ -74,6 +81,14 @@ public final class FrameOutputSmoke {
                 current = frame;
                 if (++mirrorFrames == 1) readGuiPixel(frame);
             });
+            playerCamera = MinecraftCameras.createPlayer(frame -> {
+                try {
+                    require(frame == current, "Player did not share the completed main frame");
+                    playerFrames++;
+                } catch (RuntimeException error) {
+                    failure = error;
+                }
+            });
             exclusive = MinecraftFrameOutputs.open(FrameOutputMode.OFFSCREEN_ONLY, frame -> {
                 try {
                     require(frame == current && mirror.latest().orElseThrow() == frame,
@@ -87,7 +102,9 @@ public final class FrameOutputSmoke {
             return;
         }
         require(!mirror.isClosed() && !exclusive.isClosed(), "Frame router detached a smoke subscriber");
+        verifyPlayerCamera(client);
         if (!sampled || !fitted || exclusiveFrames < 3 || !verifyPreviewWindows(client)) return;
+        require(playerCamera.state() == CameraState.CLOSED, "Player camera did not finish the lifecycle probe");
         exclusive.close();
         require(!current.resource().isClosed(), "Closing one consumer retired a shared snapshot");
         mirror.close();
@@ -97,6 +114,29 @@ public final class FrameOutputSmoke {
         LogUtils.getLogger().info("KASUGA_FRAME_OUTPUT_PASS final-gui,shared,exclusive,retired,custom-view,resize");
         finished = true;
         client.stop();
+    }
+
+    private static void verifyPlayerCamera(Minecraft client) throws Exception {
+        if (mirrorFrames == 1) {
+            require(playerFrames == 1 && playerCamera.type() == CameraType.PLAYER, "Missing player output");
+            WorldCameraView pose = playerCamera.pose();
+            require(pose.width() == client.gameRenderer.mainRenderTarget().width
+                            && pose.height() == client.gameRenderer.mainRenderTarget().height
+                            && pose.yaw() == client.gameRenderer.mainCamera().yRot(), "Player pose did not match the live main view");
+            playerCamera.pause();
+        } else if (mirrorFrames == 3) {
+            require(playerFrames == 1 && playerCamera.state() == CameraState.PAUSED && !playerResumed,
+                    "Paused player camera unexpectedly received a frame");
+            playerCamera.resume();
+            playerResumed = true;
+        } else if (mirrorFrames == 5) {
+            require(playerFrames == 3 && playerCamera.state() == CameraState.READY, "Player camera did not resume");
+            playerCamera.close();
+            try (CameraHandle replacement = MinecraftCameras.createPlayer(frame -> {})) {
+                require(replacement.state() == CameraState.READY, "Player owner did not release its reservation");
+            }
+            LogUtils.getLogger().info("KASUGA_PLAYER_CAMERA_PASS host-pose,shared-frame,pause,resume,close,reopen");
+        }
     }
 
     private static boolean verifyPreviewWindows(Minecraft client) throws Exception {
