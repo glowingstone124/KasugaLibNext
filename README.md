@@ -139,6 +139,10 @@ Install the adapter from `external/uip/ldlib/build/26.3/libs` on both sides with
 LDLib2 26.3.2.46 for NeoForge. `LdElement` hosts a client-side `ModularUI`, and `LdMenuElement`
 moves an initialized container menu into the world while keeping its server sync channel.
 `ModelPreviewElement` embeds a Kasuga model preview in an LDLib2 UI.
+The optional Compose adapter is built with `./gradlew -PkasugaMinecraft=26.3 :external:uip:ldlib-compose:jar`.
+Install its jar from `external/uip/ldlib-compose/build/26.3/libs` with the LDLib2 adapter and
+upstream LDLib2 Compose 26.3.0.1. `ComposeWorldUi.attach` hosts a local composition and
+`ModelPreview` owns the preview until its node is disposed.
 `MinecraftFrameOutputs` exports the final main view and completed custom views as
 RenderPearl textures. Detached cameras and SDL preview windows use the same output API on
 Vulkan and OpenGL. See the [frame output reference](doc/reference/frame-output.en.md#minecraft-263).
@@ -155,8 +159,9 @@ The 26.3 core includes the scripting API, package discovery, engine registry, an
 reload lifecycle. To run JavaScript, build `./gradlew -PkasugaMinecraft=26.3 :external:slp:javet:assemble`
 and install the Javet `-all.jar` from `external/slp/javet/build/26.3/libs` alongside KasugaLib's `-all.jar`.
 The Javet jar bundles V8 for Windows x86-64 and macOS and Linux on x86-64 or ARM64.
-Integration modules whose upstream mods still target earlier Minecraft releases
-stay in the 1.21.1 build.
+Create and ModernUI integrations stay in the 1.21.1 build. The legacy Iris shader-pack
+integration also stays on 1.21.1. On NeoForge 26.3.0.109, Iris 1.11.7's required
+Sodium 0.9.2 fails during startup and Sodium 0.9.3-beta.5 requires a newer Iris version.
 
 The 26.3 development client can check both graphics backends using an isolated test
 world and framebuffer readback. The test selects and checks the requested backend:

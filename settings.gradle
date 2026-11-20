@@ -35,6 +35,8 @@ if (minecraftTarget == '26.3') {
     project(':external:slp:javet').buildFileName = 'build.26.3.gradle'
     include ':external:uip:ldlib'
     project(':external:uip:ldlib').buildFileName = 'build.26.3.gradle'
+    include ':external:uip:ldlib-compose'
+    project(':external:uip:ldlib-compose').buildFileName = 'build.26.3.gradle'
 } else {
     include ':modules:render-opengl'
     include ':modules:core'
