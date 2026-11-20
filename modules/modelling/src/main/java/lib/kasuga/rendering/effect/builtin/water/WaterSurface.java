@@ -1,12 +1,10 @@
 package lib.kasuga.rendering.effect.builtin.water;
 
-import com.mojang.blaze3d.platform.NativeImage;
-import com.mojang.blaze3d.systems.RenderSystem;
 import lib.kasuga.rendering.water.ShallowWaterGrid;
 import lib.kasuga.rendering.water.WaterOptics;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.texture.DynamicTexture;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Objects;
@@ -26,11 +24,11 @@ public final class WaterSurface implements AutoCloseable {
     private boolean closed, followPlayer, playerInteraction = true, renderEnabled = true;
     private WaterOptics optics = WaterOptics.DEFAULT;
     private DoubleBinaryOperator terrainHeight;
-    private DynamicTexture texture;
+    private final WaterHeightTexture texture = new WaterHeightTexture();
     private Vec3 previousFeet;
     private float stepDistance;
     private int foot;
-    private long revision, uploaded = -1;
+    private long revision;
     private long interactions;
 
     WaterSurface(ClientLevel level, double x, float bedY, double z, int resolution, float cellSize, float depth) {
@@ -81,9 +79,9 @@ public final class WaterSurface implements AutoCloseable {
 
     void tick() {
         if (closed) return;
-        var player = Minecraft.getInstance().player;
+        LocalPlayer player = Minecraft.getInstance().player;
         if (followPlayer && playerInteraction && player != null) {
-            var feet = player.position();
+            Vec3 feet = player.position();
             int dx = (int) ((feet.x - centerX) / grid.cellSize());
             int dz = (int) ((feet.z - centerZ) / grid.cellSize());
             if (Math.abs(dx) > 8 || Math.abs(dz) > 8) {
@@ -92,7 +90,7 @@ public final class WaterSurface implements AutoCloseable {
             double bed = terrainHeight == null ? bedY : terrainHeight.applyAsDouble(feet.x, feet.z);
             if (!Double.isFinite(bed)) throw new IllegalStateException("Water terrain returned a non-finite height");
             if (feet.y >= bed - .15 && feet.y < surfaceY() + .06) {
-                var movement = previousFeet == null ? Vec3.ZERO : feet.subtract(previousFeet);
+                Vec3 movement = previousFeet == null ? Vec3.ZERO : feet.subtract(previousFeet);
                 double distance = movement.horizontalDistance();
                 if (previousFeet == null || previousFeet.y >= surfaceY() + .06)
                     interact(feet, Vec3.ZERO, .4f, .025f);
@@ -101,10 +99,10 @@ public final class WaterSurface implements AutoCloseable {
                     if (stepDistance >= .27f) {
                         stepDistance %= .27f;
                         double yaw = Math.toRadians(player.getYRot()), side = (++foot % 2 == 0 ? 1 : -1) * .16;
-                        var footPosition = feet.add(Math.cos(yaw) * side, 0, Math.sin(yaw) * side);
+                        Vec3 footPosition = feet.add(Math.cos(yaw) * side, 0, Math.sin(yaw) * side);
                         interact(footPosition, movement.scale(20), .4f, .024f);
                     }
-                    var velocity = player.getDeltaMovement();
+                    Vec3 velocity = player.getDeltaMovement();
                     float waterX = grid.velocityX((float) (feet.x - centerX), (float) (feet.z - centerZ));
                     float waterZ = grid.velocityZ((float) (feet.x - centerX), (float) (feet.z - centerZ));
                     player.setDeltaMovement(velocity.x * .985 + waterX * .0005, velocity.y,
@@ -119,31 +117,18 @@ public final class WaterSurface implements AutoCloseable {
         grid.step(.05f); seconds += .05f; revision++;
     }
 
-    int texture() {
-        if (texture == null) {
-            texture = new DynamicTexture(new NativeImage(grid.size(), grid.size(), false));
-            texture.setFilter(true, false);
-        }
-        if (uploaded != revision) {
-            var pixels = texture.getPixels();
-            for (int z = 0; z < grid.size(); z++) for (int x = 0; x < grid.size(); x++) {
-                int height = Math.round(Math.clamp((grid.cellDepth(x, z) - grid.restDepth() + .25f) * 2, 0, 1) * 65535);
-                // ABGR image; red is the high byte, green is the low byte of the encoded displacement.
-                pixels.setPixelRGBA(x, z, 0xFF000000 | (height & 255) << 8 | height >>> 8);
-            }
-            texture.upload(); uploaded = revision;
-        }
-        return texture.getId();
+    WaterHeightTexture texture() {
+        texture.update(grid, revision);
+        return texture;
     }
+
     @Override public void close() {
         if (closed) return;
         closed = true;
-        DynamicTexture retired = texture;
-        texture = null;
-        if (retired != null) {
-            if (RenderSystem.isOnRenderThread()) retired.close();
-            else RenderSystem.recordRenderCall(retired::close);
+        try {
+            texture.close();
+        } finally {
+            WaterEffects.remove(this);
         }
-        WaterEffects.remove(this);
     }
 }

@@ -86,7 +86,7 @@ public final class WaterEffects {
         INVERSE.set(VIEW_PROJECTION).invert();
         var eye = world.camera().getPosition();
         context.fullscreen(MAIN, shader).colorSampler("SceneSampler", context.read(SCENE))
-                .depthSampler("DepthSampler", context.read(SCENE)).textureSampler("HeightSampler", water.texture())
+                .depthSampler("DepthSampler", context.read(SCENE)).textureSampler("HeightSampler", water.texture().id())
                 .uniforms(s -> {
                     s.safeGetUniform("InverseViewProjection").set(INVERSE);
                     s.safeGetUniform("ViewProjection").set(VIEW_PROJECTION);

@@ -2,7 +2,6 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
-import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.effect.DuplicatePolicy;
 import lib.kasuga.rendering.effect.particle.ParticleInstance;
 import lib.kasuga.rendering.effect.particle.ParticleRenderPipeline;
@@ -92,7 +91,6 @@ final class ParticleSmoke {
                 if (pixels != 0) throw new IllegalStateException("Closed particles persisted: " + pixels);
                 stage = Stage.DONE;
                 LogUtils.getLogger().info("KASUGA_PARTICLES_PASS instanced-mesh,classic,oit,close");
-                DocumentSmoke.start(client);
             }
             case DONE -> throw new IllegalStateException("Particle smoke already completed");
         }

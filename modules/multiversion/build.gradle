@@ -99,6 +99,7 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/rendering/effect/EffectRenderPipeline.java',
                 'lib/kasuga/rendering/effect/ClientEffectRuntime.java',
                 'lib/kasuga/rendering/effect/particle/**',
+                'lib/kasuga/rendering/effect/builtin/water/WaterSurface.java',
                 'lib/kasuga/rendering/effect/builtin/blackhole/BlackHoleEffect.java',
                 'lib/kasuga/rendering/effect/builtin/blackhole/BlackHoleShaderProvider.java',
                 'lib/kasuga/rendering/effect/post/PostProcessTargetDescriptor.java',
