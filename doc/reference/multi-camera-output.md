@@ -123,20 +123,22 @@ buffers、目标、camera、资源 getter 指向当前机位，world stage 收�
 
 ## 远处区块与实体
 
-服务端也需安装包含该功能的 KasugaLib；单人集成服务器同样使用协议。
-不支持 channel 的服务器会让机位明确失败，不假装加载了远处世界。
+远程订阅要求服务端安装同版本的 KasugaLib。单人集成服务器也使用订阅协议。
+服务端未提供通道时，26.3 继续使用客户端已加载的世界数据。1.21.1 会报告机位失败。
 
 服务端按 camera UUID、epoch、维度和中心管理订阅，分批申请 FULL/non-ticking
 区块 tickets，不在主线程阻塞等待生成。每订阅每 tick 最多申请 8 个 ticket、
 发送 4 个已完成且 light-ready 的快照；方块/光照变化触发重发。客户端把
 区块、heightmap、光照及方块实体送进各自 ClientLevel。移动丢弃范围外缓存
 与过期 epoch 数据，并清理 light/Sodium tracker。暂停、关闭、登出、维度
-变化和 heartbeat 超时撤销服务端 tickets。
+变化和 heartbeat 超时撤销服务端 tickets。26.3 每名玩家最多同时订阅四路远程机位，
+同一区块的订阅共用票据，原版追踪范围内的区块继续从主客户端缓存复制。
 
 实体每 5 ticks 同步 spawn、位置、头朝向、完整 metadata、装备、属性、乘客
 和已有 leash 到机位世界，副本独立插值，不消费原版 `packDirty`，保持主玩家
 实体追踪。该订阅不是新玩家连接：远处能加载/拍摄，但 non-ticking tickets
-不扩展 AI/红石的服务端模拟范围。
+不扩展 AI/红石的服务端模拟范围。26.3 单路最多同步距离机位最近的 512 个实体，
+已由主客户端追踪的实体沿用宿主状态。
 
 ## 输出规约与边界
 

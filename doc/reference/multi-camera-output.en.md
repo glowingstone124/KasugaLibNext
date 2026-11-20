@@ -147,10 +147,8 @@ releases its native buffers, sky VBO, pipeline, and FBO after stopping its terra
 
 ## Distant chunks and entities
 
-The server must also have KasugaLib with this feature installed; the integrated server in single
-player uses the protocol as well.
-A server without the channel support makes the camera view fail explicitly rather than pretending
-the distant world was loaded.
+Distant subscriptions require the matching KasugaLib version on the server. The single-player integrated server also uses this protocol.
+With servers that lack the channel, 26.3 uses world data already loaded by the client. The 1.21.1 camera reports a failure.
 
 The server manages subscriptions by camera UUID, epoch, dimension, and center, requests
 FULL/non-ticking chunk tickets in batches, and does not block the main thread waiting for
@@ -158,7 +156,8 @@ generation. Per subscription it requests at most 8 tickets and sends 4 completed
 snapshots per tick; block/lighting changes trigger resends. The client feeds chunks, heightmaps,
 lighting, and block entities into its own ClientLevel. Movement discards caches outside the range
 and data from stale epochs, and cleans up the light/Sodium tracker. Pausing, closing, logging out,
-dimension changes, and heartbeat timeouts withdraw the server tickets.
+dimension changes, and heartbeat timeouts withdraw the server tickets. On 26.3, each player can have four concurrent remote subscriptions.
+Overlapping views share chunk tickets, and chunks inside the vanilla tracking range use the main client cache.
 
 Entities are synced to the camera-view world every 5 ticks — spawn, position, head rotation, full
 metadata, equipment, attributes, passengers,
@@ -166,7 +165,7 @@ and existing leashes. The copy interpolates independently, does not consume the 
 and keeps tracking the main player
 entity. This subscription is not a new player connection: distant areas can be loaded/captured, but
 non-ticking tickets
-do not extend the server simulation range for AI/redstone.
+do not extend the server simulation range for AI/redstone. On 26.3 each remote view syncs up to the 512 nearest entities and uses the host state for entities already tracked by the main client.
 
 ## Output rules and boundaries
 

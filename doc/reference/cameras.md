@@ -1,8 +1,8 @@
 # Player / Free / Fixed Camera
 
 Minecraft 26.3 的 Vulkan 和 OpenGL 后端支持 Player、Free 和 Fixed 机位。帧资源类型为 `GpuTextureView`。
-Free 和 Fixed 从当前客户端已加载的区块生成独立视图，复用宿主资源包、mipmap 和渲染管线。
-远程区块订阅、单机位资源包和 Iris shader pack 配置适用于下文的 1.21.1 实现。
+Free 和 Fixed 支持独立视图及远处区块和实体订阅，复用宿主资源包、mipmap 和渲染管线。
+服务端未提供订阅通道时，26.3 使用当前客户端已加载的世界数据。单机位资源包和 Iris shader pack 配置适用于下文的 1.21.1 实现。
 
 通用数据位于 `lib.kasuga.rendering.output.camera`，Minecraft 接入位于
 `lib.kasuga.rendering.output.mc`。原理见 [多机位与输出](../explanation/offline-rendering-and-multi-cam.md)。

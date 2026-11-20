@@ -27,6 +27,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.event.level.ChunkEvent;
 
 import java.util.Objects;
@@ -143,7 +144,14 @@ public final class MinecraftCameras {
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
         Minecraft client = Minecraft.getInstance();
         if (client.level == null || client.isPaused()) return;
-        for (DetachedOutput output : List.copyOf(VIEWS.values())) output.owner.tick(1 / 20f);
+        for (DetachedOutput output : List.copyOf(VIEWS.values())) {
+            if (output.view != null) output.view.tickStreaming();
+            output.owner.tick(1 / 20f);
+        }
+    }
+
+    @SubscribeEvent public static void loggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
+        for (DetachedOutput output : List.copyOf(VIEWS.values())) output.releaseView();
     }
 
     @SubscribeEvent public static void chunkLoaded(ChunkEvent.Load event) {
@@ -203,7 +211,10 @@ public final class MinecraftCameras {
             if (owner.state() != CameraState.READY || client.level == null || client.player == null
                     || !client.gameRenderer.mainCamera().isInitialized()) return;
             WorldCameraView pose = owner.sampleAvailablePose(client.getDeltaTracker().getGameTimeDeltaPartialTick(true)).orElse(null);
-            if (pose == null) return;
+            if (pose == null) {
+                releaseView();
+                return;
+            }
             if (view == null) view = new DetachedWorldCamera(client, client.level, id, pose, settings);
             view.render(client, pose);
         }
@@ -215,7 +226,9 @@ public final class MinecraftCameras {
             previous.close();
         }
 
-        @Override public void setEnabled(boolean enabled) { }
+        @Override public void setEnabled(boolean enabled) {
+            if (!enabled) releaseView();
+        }
         @Override public boolean isClosed() { return closed || output.isClosed(); }
         @Override public Optional<CameraRenderSettings> renderSettings() { return Optional.of(settings); }
 

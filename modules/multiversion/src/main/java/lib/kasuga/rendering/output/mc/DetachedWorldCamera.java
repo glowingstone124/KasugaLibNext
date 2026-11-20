@@ -122,6 +122,8 @@ final class DetachedWorldCamera implements AutoCloseable {
         MinecraftFrameOutputs.publish(scope.viewId(), target);
     }
 
+    void tickStreaming() { world.tickStreaming(); }
+
     void markChunkDirty(net.minecraft.world.level.ChunkPos position) { world.markDirty(position); }
 
     boolean isFor(ClientLevel level) { return world.isFor(level); }

@@ -17,6 +17,7 @@ import lib.kasuga.rendering.output.camera.CameraHandle;
 import lib.kasuga.rendering.output.camera.CameraState;
 import lib.kasuga.rendering.output.camera.CameraRenderSettings;
 import net.minecraft.world.phys.Vec3;
+import lib.kasuga.rendering.output.mc.stream.RemoteCameraSmoke;
 import lib.kasuga.rendering.output.camera.CameraType;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -66,6 +67,8 @@ public final class FrameOutputSmoke {
 
     public static void start(Minecraft client) {
         screen = new Screen(Component.literal("Frame output smoke")) {
+            @Override public boolean isPauseScreen() { return false; }
+
             @Override
             public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
                 graphics.fill(0, 0, width, height, GUI_COLOR);
@@ -79,6 +82,7 @@ public final class FrameOutputSmoke {
     public static void afterFrame(Minecraft client) throws Exception {
         if (finished) return;
         if (failure != null) throw failure;
+        if (!RemoteCameraSmoke.verify(client)) return;
         if (++frames > 240) throw new IllegalStateException("Frame output smoke expired without a readback");
         if (frames < 3 || !verifyDetachedViews(client)) return;
         if (mirror == null) {

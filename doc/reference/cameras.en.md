@@ -1,8 +1,8 @@
 # Player / Free / Fixed Camera
 
 Minecraft 26.3 supports Player, Free and Fixed cameras on Vulkan and OpenGL. Its frame resource type is `GpuTextureView`.
-Free and Fixed use the chunks already loaded by the client and share the host resource packs, mipmaps, and rendering pipelines.
-The remote chunk subscription, per-view resource packs, and Iris shader-pack settings described below apply to 1.21.1.
+Free and Fixed support independent views with distant chunk and entity subscriptions and share the host resource packs, mipmaps, and rendering pipelines.
+On 26.3, servers without the subscription channel use the world data already loaded by the client. The per-view resource packs and Iris shader-pack settings below apply to 1.21.1.
 
 The generic data lives in `lib.kasuga.rendering.output.camera`, and the Minecraft integration in
 `lib.kasuga.rendering.output.mc`. For the mechanics see [Multi-camera and output](../explanation/offline-rendering-and-multi-cam.md).
