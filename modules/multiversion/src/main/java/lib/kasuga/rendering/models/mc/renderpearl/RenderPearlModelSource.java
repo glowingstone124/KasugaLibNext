@@ -2,6 +2,7 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.PoseStack;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.models.mc.scene.LayerLayout;
 import lib.kasuga.rendering.models.mc.scene.ModelBounds;
@@ -17,6 +18,7 @@ import lib.kasuga.rendering.models.uml.structure.material.Texture;
 import lib.kasuga.rendering.models.uml.util.MeshMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.Identifier;
@@ -133,6 +135,29 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
     }
 
     public ModelInstance instance() { return model; }
+
+    public ModelBounds bounds() { return bounds; }
+
+    /** Captures this model's posed geometry for a non-world render target. */
+    public Geometry captureGeometry(float partialTick, Object frameToken, int packedLight) {
+        RenderSystem.assertOnRenderThread();
+        model.requireOpen();
+        return new Geometry(RenderPearlModelGeometry.capture(model, textures, packedLight, partialTick, frameToken));
+    }
+
+    public static final class Geometry {
+        private final List<RenderPearlModelGeometry.Batch> batches;
+
+        private Geometry(List<RenderPearlModelGeometry.Batch> batches) {
+            this.batches = batches;
+        }
+
+        public void submit(PoseStack pose, SubmitNodeCollector collector) {
+            for (RenderPearlModelGeometry.Batch batch : batches) {
+                collector.submitCustomGeometry(pose, batch.layer(), batch::submit);
+            }
+        }
+    }
 
     /** Mounts this model directly in a level. The caller owns the mount and the source. */
     public RenderPearlWorldModels.Mount mount(ClientLevel level, Matrix4fc placement) {

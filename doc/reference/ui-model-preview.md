@@ -1,5 +1,25 @@
 # UI 模型预览
 
+## Minecraft 26.3
+
+原版界面通过 `GuiModelPreview` 和 `ModelPreviewWidget` 预览 Blockbench、glTF/GLB、OBJ、Java
+模型和 Bedrock 几何资源。26.3 使用 Minecraft 的画中画渲染器提供独立深度附件及 GUI 裁切，
+适用于 Vulkan 和 OpenGL。
+
+```java
+GuiModelPreview preview = new GuiModelPreview(Identifier.parse("example:models/display.geo.json"), null);
+ModelPreviewWidget widget = new ModelPreviewWidget(20, 20, 160, 120, preview);
+preview.setView(-0.55f, 0.25f, 1f);
+addRenderableWidget(widget);
+```
+
+第二个参数可以指定 Bedrock 几何名称。宿主在 `Screen.removed()` 调用 `widget.close()`。
+自定义界面可用 `preview.render(graphics, x, y, width, height)` 提交预览，读取 `failure()` 获取资源加载错误，
+或通过 `instance()` 控制局部模型姿态。资源包重载时，预览会在下次绘制前关闭旧实例并重新加载。
+通过 `GuiModelPreview(RenderPearlModelSource)` 传入已有来源时，预览接管其生命周期。
+
+## Minecraft 1.21.1
+
 Create 机器、ContraptionEntity、Create 蓝图、原版建筑 NBT 和 `.litematic` 使用同一个
 `GuiModelPreview(MinecraftModelSource)` 入口；逐层显示、爆炸图、混合 Kasuga 模型与后处理见
 [Minecraft 结构与 Create 模型预览](minecraft-model-preview.md)。

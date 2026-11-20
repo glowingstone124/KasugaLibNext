@@ -35,7 +35,10 @@ import java.util.function.Function;
 final class RenderPearlModelGeometry {
     private RenderPearlModelGeometry() {}
 
-    static List<Batch> extract(ModelInstance model, Function<Texture, Identifier> textures, int light) {
+    static List<Batch> capture(ModelInstance model, Function<Texture, Identifier> textures, int light,
+                               float partialTick, Object frameToken) {
+        model.sample(partialTick, frameToken);
+        model.prepareRenderFrame(frameToken);
         Map<RenderType, List<Corner>> groups = new LinkedHashMap<>();
         Map<Material, Surface> surfaces = new IdentityHashMap<>();
         List<BoneContext> boneContexts = new ArrayList<>();

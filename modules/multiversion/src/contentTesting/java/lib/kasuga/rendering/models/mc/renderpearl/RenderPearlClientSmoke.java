@@ -6,6 +6,7 @@ import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.host.FsmClientSmoke;
 import lib.kasuga.host.DocumentSmoke;
+import lib.kasuga.rendering.models.mc.backend.GuiPreviewSmoke;
 import lib.kasuga.host.ResourcePackSmoke;
 import lib.kasuga.host.RegistrationSmoke;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
@@ -173,7 +174,9 @@ public final class RenderPearlClientSmoke {
     @SubscribeEvent
     public static void afterFrame(RenderFrameEvent.Post event) {
         if (modelsVerified) {
-            DocumentSmoke.afterFrame(Minecraft.getInstance());
+            Minecraft client = Minecraft.getInstance();
+            if (GuiPreviewSmoke.started()) GuiPreviewSmoke.afterFrame(client);
+            else DocumentSmoke.afterFrame(client);
             return;
         }
         if (!EXPECTED_BACKEND.isEmpty() && cameraRequested && mount == null) {

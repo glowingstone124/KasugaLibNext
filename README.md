@@ -124,7 +124,10 @@ per-device files under the world's `devices/` directory into the overworld
 saved data `kasuga_lib:devices`. Records with no type ID are preserved, and
 the original files remain available.
 
-Native model previews, world UI, and other custom rendering APIs are being ported.
+Vanilla 26.3 screens can display the same resource models using
+`GuiModelPreview` and `ModelPreviewWidget`. See the
+[UI model preview reference](doc/reference/ui-model-preview.en.md#minecraft-263).
+Structure previews, world UI, and other custom rendering APIs are being ported.
 Integration modules whose upstream mods still target earlier Minecraft releases
 stay in the 1.21.1 build.
 
@@ -139,9 +142,10 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_RENDERPEARL_PASS`, `KASUGA_WORLD_LIGHTS_PASS`,
 `KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`,
 `KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
-`KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, `KASUGA_RPC_PASS`, and
-`KASUGA_NATIVE_JSON_PASS`. Captures of the models,
-animation, lighting, and held documents are saved in the test game directory.
+`KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, `KASUGA_RPC_PASS`,
+`KASUGA_NATIVE_JSON_PASS`, and `KASUGA_GUI_PREVIEW_PASS`.
+Captures of the models, animation, lighting, held documents, and GUI previews
+are saved in the test game directory.
 
 Run the focused release gate with:
 

@@ -6,6 +6,7 @@ import com.mojang.logging.LogUtils;
 import io.micronaut.context.annotation.Context;
 import io.micronaut.context.annotation.Requires;
 import lib.kasuga.KasugaLibApplication;
+import lib.kasuga.rendering.models.mc.backend.GuiPreviewSmoke;
 import lib.kasuga.content.document.DocumentComponentRegistries;
 import lib.kasuga.content.document.DocumentComponentType;
 import lib.kasuga.content.document.DocumentItem;
@@ -152,7 +153,7 @@ public final class DocumentSmoke {
             throw new IllegalStateException("Two-handed and off-hand document poses did not move the page");
         }
         LOGGER.info("KASUGA_DOCUMENT_PASS registry,heterogeneous-codecs,inventory-sync,hand-priority,two-hands,off-hand");
-        client.stop();
+        GuiPreviewSmoke.start(client);
     }
 
     private static PagePixels readPage(NativeImage image) {

@@ -94,9 +94,8 @@ public final class RenderPearlWorldModels {
                                   Matrix4dc worldPlacement, int packedLight) {
         if (model.isClosed()) return;
         float partialTick = event.getDeltaTracker().getGameTimeDeltaPartialTick(false);
-        model.sample(partialTick, event);
-        model.prepareRenderFrame(event);
-        List<RenderPearlModelGeometry.Batch> batches = RenderPearlModelGeometry.extract(model, textures, packedLight);
+        List<RenderPearlModelGeometry.Batch> batches =
+                RenderPearlModelGeometry.capture(model, textures, packedLight, partialTick, event);
         if (!batches.isEmpty()) {
             LevelRenderState state = event.getRenderState();
             List<Draw> draws = state.getRenderData(DRAW_DATA);

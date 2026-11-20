@@ -1,5 +1,27 @@
 # UI model previews
 
+## Minecraft 26.3
+
+Vanilla screens can use `GuiModelPreview` and `ModelPreviewWidget` to display Blockbench, glTF/GLB,
+OBJ, Java model, and Bedrock geometry resources. Minecraft's picture-in-picture renderer supplies
+depth attachments and GUI clipping on Vulkan and OpenGL.
+
+```java
+GuiModelPreview preview = new GuiModelPreview(Identifier.parse("example:models/display.geo.json"), null);
+ModelPreviewWidget widget = new ModelPreviewWidget(20, 20, 160, 120, preview);
+preview.setView(-0.55f, 0.25f, 1f);
+addRenderableWidget(widget);
+```
+
+The optional second argument selects a named Bedrock geometry. The owning screen calls
+`widget.close()` from `Screen.removed()`. Custom screens can call
+`preview.render(graphics, x, y, width, height)`, check `failure()` for resource loading errors,
+and use `instance()` to pose the local model. Resource pack reloads close and replace the old
+instance on the next draw. The `GuiModelPreview(RenderPearlModelSource)` overload takes ownership
+of the supplied source.
+
+## Minecraft 1.21.1
+
 Create machines, contraptions, schematics, vanilla structure NBT and `.litematic` files use
 `GuiModelPreview(MinecraftModelSource)`. See [Minecraft structures and Create previews](minecraft-model-preview.en.md)
 for layers, exploded views, UML composition and post-processing.
