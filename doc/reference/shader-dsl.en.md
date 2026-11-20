@@ -28,6 +28,15 @@
 
 - The DSL checks the stage interface of a graphics program during Java construction. The caller must match the `RenderShaderDescriptor` vertex format to the attributes.
 
+## Minecraft 26.3 Fullscreen Shaders
+
+Compile a `ShaderProgram.fullscreen(...)` on the render thread with `RenderPearlFullscreenShader.compile(program, resources, colorTargetState)`.
+The caller owns the returned handle. In a post-process graph, use `context.fullscreen(target, shader, clear, values, bindings)` and bind inputs with `bindColor` and `bindDepth`.
+The values map overrides uniform defaults by name. It supports column-major matrices, float arrays, and validation against exposed parameter ranges. Match the color attachment format to the pipeline's output.
+
+Compile once before drawing and recompile after a resource reload to pick up changes to resource files. Close the old handle with `close()`. This entry point currently accepts fullscreen programs.
+The `ShaderInstance` registration and Gradle GLSL 150 output below apply to 1.21.1.
+
 ## GraalJS Scripting
 
 The optional `:modules:shader-graal` module provides `lib.kasuga.shader.graal.GraalShaderCompiler`. It uses GraalJS Community 24.1.2 on Java 21 to call the Java DSL directly and return the same `ShaderProgram` type. The module declares its Graal Maven dependencies; the main library does not include it automatically.

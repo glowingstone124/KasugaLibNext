@@ -28,6 +28,15 @@
 
 - DSL 在 Java 构造期检查 graphics 程序的阶段接口。调用方必须让 `RenderShaderDescriptor` 的顶点格式与各属性对应。
 
+## Minecraft 26.3 全屏 Shader
+
+通过 `RenderPearlFullscreenShader.compile(program, resources, colorTargetState)` 在渲染线程编译 `ShaderProgram.fullscreen(...)`。
+返回的句柄由调用方持有。可在后处理图中调用 `context.fullscreen(target, shader, clear, values, bindings)`，并用图的 `bindColor` 和 `bindDepth` 绑定输入。
+`values` 按 uniform 名覆盖声明的默认值，矩阵按列排列，并支持浮点数组和自定义参数范围校验。颜色附件须匹配指定的格式。
+
+绘制前编译一次，在资源重载后重新编译以更新资源文件。通过 `close()` 释放旧句柄。此入口当前支持全屏程序。
+下文的 `ShaderInstance` 注册与 Gradle GLSL 150 输出对应 1.21.1。
+
 ## GraalJS 脚本入口
 
 可选模块 `:modules:shader-graal` 提供 `lib.kasuga.shader.graal.GraalShaderCompiler`。它在 Java 21 上使用 GraalJS Community 24.1.2，直接调用下面的 Java DSL，返回相同的 `ShaderProgram`。该模块自带声明所需的 Graal Maven 依赖；主库不自动引入它。

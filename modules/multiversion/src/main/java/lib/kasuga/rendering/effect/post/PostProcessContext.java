@@ -7,6 +7,7 @@ import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.UniformType;
@@ -95,7 +96,7 @@ public final class PostProcessContext {
         else throw new IllegalArgumentException("Unsupported color copy destination format: " + format);
         FilterMode filter = linearFilter ? FilterMode.LINEAR : FilterMode.NEAREST;
         RenderPassDescriptor.Builder pass = RenderPassDescriptor.builder(() -> "Kasuga color copy").withColorAttachment(to);
-        draw(pass, pipeline, bindings -> bindings.setUniform("SourceSampler", from, RenderSystem.getSamplerCache().getClampToEdge(filter)));
+        draw(pass, RenderSystem.getCompiledPipeline(pipeline), bindings -> bindings.setUniform("SourceSampler", from, RenderSystem.getSamplerCache().getClampToEdge(filter)));
     }
 
     public void copyDepth(RenderTarget source, RenderTarget destination) {
@@ -110,6 +111,12 @@ public final class PostProcessContext {
 
     /** Runs a fullscreen triangle with the attachments requested by the pipeline. */
     public static void fullscreen(RenderTarget target, RenderPipeline pipeline, boolean clear, Consumer<RenderPass> inputs) {
+        fullscreen(target, pipeline, RenderSystem.getCompiledPipeline(pipeline), clear, inputs);
+    }
+
+    /** Runs a fullscreen triangle using a caller-owned compiled pipeline. */
+    public static void fullscreen(RenderTarget target, RenderPipeline pipeline, CompiledRenderPipeline compiled,
+                                  boolean clear, Consumer<RenderPass> inputs) {
         RenderSystem.assertOnRenderThread();
         RenderPassDescriptor.Builder pass = RenderPassDescriptor.builder(() -> pipeline.getLocation().toString());
         PostProcessTargetDescriptor descriptor = PostProcessTargetPool.descriptor(target);
@@ -132,12 +139,12 @@ public final class PostProcessContext {
             pass.withColorAttachment(color, clearColor);
         }
         if (pipeline.wantsDepthTexture()) pass.withDepthAttachment(depth(target));
-        draw(pass, pipeline, inputs);
+        draw(pass, compiled, inputs);
     }
 
-    private static void draw(RenderPassDescriptor.Builder descriptor, RenderPipeline pipeline, Consumer<RenderPass> inputs) {
+    private static void draw(RenderPassDescriptor.Builder descriptor, CompiledRenderPipeline pipeline, Consumer<RenderPass> inputs) {
         try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(descriptor.build())) {
-            pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
+            pass.setPipeline(pipeline);
             RenderSystem.bindDefaultUniforms(pass);
             inputs.accept(pass);
             pass.draw(3, 1, 0, 0);

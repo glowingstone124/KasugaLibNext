@@ -8,6 +8,7 @@ import lib.kasuga.shader.ShaderStructField;
 import lib.kasuga.shader.ShaderStructType;
 
 import java.util.Iterator;
+import java.util.function.Consumer;
 
 /** Deterministic GLSL 1.50 emitter for the backend-neutral shader IR. */
 public final class Glsl150Backend {
@@ -22,7 +23,16 @@ public final class Glsl150Backend {
     }
 
     private static String emitModule(ShaderModule module) {
-        StringBuilder output = new StringBuilder("#version 150\n");
+        return emitModule(module, "#version 150\n", output -> {
+            for (ShaderGlobal global : module.globals()) {
+                output.append(storage(global.storage()));
+                appendGlobalDeclaration(output, global);
+            }
+        });
+    }
+
+    static String emitModule(ShaderModule module, String header, Consumer<StringBuilder> emitGlobals) {
+        StringBuilder output = new StringBuilder(header);
         for (String source : module.rawPreamble()) appendRaw(output, source, 0);
         output.append('\n');
         for (ShaderStructType type : module.structs()) {
@@ -34,14 +44,7 @@ public final class Glsl150Backend {
             output.append("};\n");
         }
         if (!module.structs().isEmpty()) output.append('\n');
-        for (ShaderGlobal global : module.globals()) {
-            output.append(storage(global.storage()))
-                    .append(global.type().glslName())
-                    .append(' ')
-                    .append(global.name());
-            if (global.isArray()) output.append('[').append(global.arrayLength()).append(']');
-            output.append(";\n");
-        }
+        emitGlobals.accept(output);
         if (!module.globals().isEmpty()) output.append('\n');
         for (String source : module.rawDeclarations()) appendRaw(output, source, 0);
         if (!module.rawDeclarations().isEmpty()) output.append('\n');
@@ -49,6 +52,12 @@ public final class Glsl150Backend {
         emitBlock(output, module.entryPoint(), 1);
         output.append("}\n");
         return output.toString();
+    }
+
+    static void appendGlobalDeclaration(StringBuilder output, ShaderGlobal global) {
+        output.append(global.type().glslName()).append(' ').append(global.name());
+        if (global.isArray()) output.append('[').append(global.arrayLength()).append(']');
+        output.append(";\n");
     }
 
     public static String fullscreenVertex() {

@@ -162,11 +162,13 @@ dependencies {
         exclude group: 'org.slf4j', module: 'slf4j-api'
     }
 
+    api(project(':modules:shader')) { transitive = false }
     api(project(':modules:render-core')) { transitive = false }
     api(project(':modules:formula')) { transitive = false }
     api(project(':modules:utils')) { transitive = false }
     runtimeOnly 'de.javagl:jgltf-model:2.0.4'
     runtimeOnly 'de.javagl:jgltf-impl-v2:2.0.4'
+    bundledLibrary(project(':modules:shader')) { transitive = false }
     bundledLibrary(project(':modules:render-core')) { transitive = false }
     bundledLibrary(project(':modules:formula')) { transitive = false }
     bundledLibrary(project(':modules:utils')) { transitive = false }

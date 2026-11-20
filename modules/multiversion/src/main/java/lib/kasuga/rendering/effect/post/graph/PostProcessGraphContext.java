@@ -6,6 +6,7 @@ import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.textures.FilterMode;
 import lib.kasuga.rendering.effect.post.PostProcessContext;
+import lib.kasuga.rendering.effect.shader.RenderPearlFullscreenShader;
 
 import java.util.Map;
 import java.util.Objects;
@@ -55,6 +56,11 @@ public final class PostProcessGraphContext {
 
     public void fullscreen(PostProcessGraphTarget output, RenderPipeline pipeline, boolean clear, Consumer<RenderPass> inputs) {
         PostProcessContext.fullscreen(write(output), pipeline, clear, inputs);
+    }
+
+    public void fullscreen(PostProcessGraphTarget output, RenderPearlFullscreenShader shader, boolean clear,
+                           Map<String, double[]> uniforms, Consumer<RenderPass> inputs) {
+        shader.draw(write(output), clear, uniforms, inputs);
     }
 
     /** Bind a declared color input using the target's sampling policy. */

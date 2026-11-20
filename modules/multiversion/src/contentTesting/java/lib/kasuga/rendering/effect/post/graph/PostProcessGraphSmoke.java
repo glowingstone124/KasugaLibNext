@@ -17,6 +17,14 @@ import lib.kasuga.rendering.effect.WorldPipelineSmoke;
 import lib.kasuga.rendering.effect.post.PostProcessContext;
 import lib.kasuga.rendering.effect.post.PostProcessTargetDescriptor;
 import lib.kasuga.rendering.effect.post.PostProcessTargetDescriptor.ColorFormat;
+import lib.kasuga.rendering.effect.shader.RenderPearlFullscreenShader;
+import lib.kasuga.shader.FloatArrayExpr;
+import lib.kasuga.shader.FloatExpr;
+import lib.kasuga.shader.IntExpr;
+import lib.kasuga.shader.Mat3Expr;
+import lib.kasuga.shader.Sampler2DExpr;
+import lib.kasuga.shader.ShaderProgram;
+import lib.kasuga.shader.Vec3Expr;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.resources.Identifier;
@@ -25,6 +33,8 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 
+import java.io.IOException;
+import java.util.Map;
 import java.util.Optional;
 
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
@@ -33,6 +43,8 @@ public final class PostProcessGraphSmoke {
     private static final Identifier COLORS_ID = id("graph_smoke/colors");
     private static final Identifier DEPTH_ID = id("graph_smoke/depth");
     private static final Identifier PROBE_ID = id("graph_smoke/probe");
+    private static final Identifier GENERATED_ID = id("graph_smoke/generated");
+    private static final PostProcessGraphTarget GENERATED = PostProcessGraphTarget.managed(GENERATED_ID);
     private static final PostProcessGraphTarget PROBE = PostProcessGraphTarget.managed(PROBE_ID);
     private static final PostProcessGraphTarget COLORS = PostProcessGraphTarget.managed(COLORS_ID);
     private static final PostProcessGraphTarget DEPTH = PostProcessGraphTarget.managed(DEPTH_ID);
@@ -62,6 +74,9 @@ public final class PostProcessGraphSmoke {
     private static PostProcessGraphRegistration registration;
     private static PostProcessGraphRegistration brokenRegistration;
     private static RenderTarget probe;
+    private static RenderTarget generatedOutput;
+    private static RenderPearlFullscreenShader generatedShader;
+    private static boolean verifiedGenerated;
     private static boolean threw;
     private static boolean verifiedMain;
     private static boolean verifiedProbe;
@@ -87,7 +102,7 @@ public final class PostProcessGraphSmoke {
     public static void afterFrame(Minecraft client) {
         if (failure != null) throw failure;
         if (registration == null) {
-            install();
+            install(client);
             return;
         }
         if (pending || frames < 3) return;
@@ -114,9 +129,21 @@ public final class PostProcessGraphSmoke {
                 failure = error;
             }
         });
+        Screenshot.takeScreenshot(generatedOutput, image -> {
+            try (image) {
+                verifyGenerated(image);
+                client.execute(() -> {
+                    verifiedGenerated = true;
+                    finish(client);
+                });
+            } catch (RuntimeException error) {
+                failure = error;
+            }
+        });
     }
 
-    private static void install() {
+    private static void install(Minecraft client) {
+        compileGeneratedShader(client);
         WorldPipelineSmoke.install(() -> frames);
         PostProcessGraph broken = PostProcessGraph.builder(id("graph_smoke/broken"))
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/throw_once"), context -> {
@@ -131,6 +158,7 @@ public final class PostProcessGraphSmoke {
                         .colorAttachments(ColorFormat.RGBA16F, ColorFormat.RGBA8).build())
                 .target(PostProcessTargetDescriptor.builder(DEPTH_ID).useDepth(true).build())
                 .target(PostProcessTargetDescriptor.builder(PROBE_ID).fixedSize(16, 16).build())
+                .target(PostProcessTargetDescriptor.builder(GENERATED_ID).fixedSize(16, 16).build())
                 .prepare((context, frame) -> {
                     if (prepared) return true;
                     require(threw && !brokenRegistration.isActive(), "Failed graph was not isolated from the next graph");
@@ -145,6 +173,12 @@ public final class PostProcessGraphSmoke {
                         context.bindDepth(pass, "CopiedDepthSampler", DEPTH);
                     });
                 }).readsMain().reads(COLORS, DEPTH).writes(PROBE).build())
+                .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/generated"), context -> {
+                    generatedOutput = context.write(GENERATED);
+                    context.fullscreen(GENERATED, generatedShader, true,
+                            Map.of("Tint", new double[]{.1, .2, .5}, "Weights", new double[]{.9, .3, .8}),
+                            pass -> context.bindColor(pass, "ProbeSampler", PROBE, 0));
+                }).reads(PROBE).writes(GENERATED).build())
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/display"), context -> {
                     hdr = PostProcessContext.color(context.read(COLORS), 0);
                     ldr = PostProcessContext.color(context.read(COLORS), 1);
@@ -166,6 +200,31 @@ public final class PostProcessGraphSmoke {
         require(registration.isActive() && !original.isActive(), "A stale handle removed its replacement");
     }
 
+    private static void compileGeneratedShader(Minecraft client) {
+        ShaderProgram program = ShaderProgram.fullscreen("kasuga_lib:graph_smoke/generated", shader -> {
+            Vec3Expr tint = shader.uniformVec3("Tint", 0, 0, 0);
+            FloatExpr scale = shader.uniformFloat("Scale", .5f);
+            Mat3Expr transform = shader.uniformMat3("Transform", 1, 0, 0, 0, 2, 0, 0, 0, 1);
+            FloatArrayExpr weights = shader.uniformFloatArray("Weights", 3, 0);
+            IntExpr index = shader.uniformInt("Index", 1);
+            Sampler2DExpr source = shader.sampler2D("ProbeSampler");
+            FloatExpr probe = source.sample(shader.texCoord()).r();
+            Vec3Expr result = transform.transform(tint).mul(scale);
+            shader.fragmentColor(shader.vec4(result.x(), result.y(), weights.get(index).mul(probe), shader.f32(1)));
+        });
+        try {
+            generatedShader = RenderPearlFullscreenShader.compile(program, client.getResourceManager(), ColorTargetState.DEFAULT);
+        } catch (IOException exception) {
+            throw new IllegalStateException("Failed to compile generated fullscreen shader", exception);
+        }
+    }
+
+    private static void verifyGenerated(NativeImage image) {
+        int pixel = image.getPixel(8, 8);
+        require(Math.abs((pixel >>> 16 & 255) - 13) <= 1 && Math.abs((pixel >>> 8 & 255) - 51) <= 1
+                && Math.abs((pixel & 255) - 77) <= 1, "Generated shader parameters or sampler were incorrect: " + Integer.toHexString(pixel));
+    }
+
     private static void verifyPixels(NativeImage image) {
         int y = image.getHeight() / 2;
         int left = image.getPixel(image.getWidth() / 4, y);
@@ -185,7 +244,9 @@ public final class PostProcessGraphSmoke {
     }
 
     private static void finish(Minecraft client) {
-        if (!verifiedMain || !verifiedProbe) return;
+        if (!verifiedMain || !verifiedProbe || !verifiedGenerated) return;
+        generatedShader.close();
+        LogUtils.getLogger().info("KASUGA_SHADER_DSL_PASS generated-fullscreen,uniform-defaults,uniform-overrides,std140,sampler");
         WorldPipelineSmoke.finish();
         GpuTextureView probeView = PostProcessContext.color(probe, 0);
         registration.close();

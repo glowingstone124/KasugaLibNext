@@ -141,6 +141,8 @@ attachments, and color and depth copies. See the
 [26.3 post-process graph reference](doc/reference/effects-and-postfx.en.md#minecraft-263-post-process-graphs).
 World render callbacks expose the native stage and active RenderPearl pass.
 See the [26.3 world render callback reference](doc/reference/effect-rendering.en.md#minecraft-263-world-render-callbacks).
+Fullscreen Shader DSL programs compile through RenderPearl and use std140 uniforms.
+See the [26.3 fullscreen shader reference](doc/reference/shader-dsl.en.md#minecraft-263-fullscreen-shaders).
 Other custom rendering APIs are being ported.
 Integration modules whose upstream mods still target earlier Minecraft releases
 stay in the 1.21.1 build.
@@ -158,7 +160,8 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
 `KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, `KASUGA_RPC_PASS`,
 `KASUGA_NATIVE_JSON_PASS`, `KASUGA_MMD_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
-`KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_PIPELINE_PASS`, `KASUGA_POST_GRAPH_PASS`, `KASUGA_WORLD_UI_PASS`,
+`KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_PIPELINE_PASS`, `KASUGA_POST_GRAPH_PASS`,
+`KASUGA_SHADER_DSL_PASS`, `KASUGA_WORLD_UI_PASS`,
 and `KASUGA_FRAME_OUTPUT_PASS`.
 Captures of the models, animation, lighting, held documents, and GUI previews
 are saved in the test game directory.
