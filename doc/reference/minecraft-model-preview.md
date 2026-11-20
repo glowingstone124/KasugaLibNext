@@ -1,5 +1,24 @@
 # Minecraft 结构与 Create 模型预览
 
+## Minecraft 26.3
+
+```java
+BlockModelSource source = MinecraftModelSources.structure(level, Identifier.parse("minecraft:end_city/base_floor"));
+GuiModelPreview preview = new GuiModelPreview(source);
+preview.setLayers(LayerLayout.ASSEMBLED.range(0, 5).separation(.5));
+```
+
+还可通过 `structure(level, path)`、`litematic(level, path)` 和 `blueprint(level, path)` 打开
+本地文件。`blueprint` 根据内容识别原版结构 NBT、Litematic 和 Sponge v2/v3。
+`capture(level, minimum, maximum)` 读取已加载的方块区域。
+
+同一个来源接口用于原版 `ModelPreviewWidget` 和 `SceneModels`。GUI 宿主从 `removed()`
+关闭控件，场景关闭时会释放场景持有的来源。`preview.pick(x, y)` 使用画布内归一化坐标，
+返回源方块位置和方块状态。Vulkan 和 OpenGL 路径使用原版烘焙方块和流体几何。
+方块实体 NBT 可用 `BlockModelSource.blockEntityData(position)` 读取，方块实体渲染仍在移植。
+
+## Minecraft 1.21.1
+
 `MinecraftModelSource` 是 Minecraft 原生内容与 Kasuga 模型的共同显示入口。`GuiModelPreview`
 接收这个入口后，仍可交给原版 `ModelPreviewWidget`、LDLib2 `ModelPreviewElement`，或放进
 `UIBackend` 的世界面板。预览持有独立的深度画布；源数据不会被放置进游戏世界。

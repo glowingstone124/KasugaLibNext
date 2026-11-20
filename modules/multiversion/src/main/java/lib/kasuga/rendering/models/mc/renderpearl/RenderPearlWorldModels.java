@@ -7,29 +7,26 @@ import lib.kasuga.rendering.lighting.LightFrame;
 import lib.kasuga.rendering.models.mc.component.ModelComponents;
 import lib.kasuga.rendering.models.mc.component.ModelComponentsHolder;
 import lib.kasuga.rendering.models.mc.component.ModelLightPlacement;
+import lib.kasuga.rendering.models.mc.scene.MinecraftModelSource;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
 import lib.kasuga.rendering.models.uml.util.MeshMode;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.state.level.LevelRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
-import net.minecraft.util.context.ContextKey;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
-import net.neoforged.neoforge.client.event.SubmitCustomGeometryEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import org.joml.Matrix4d;
 import org.joml.Matrix4dc;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 
-import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,8 +37,6 @@ import java.util.function.Function;
 /** Renders portable Kasuga models through the active Minecraft graphics backend. */
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
 public final class RenderPearlWorldModels {
-    private static final ContextKey<List<Draw>> DRAW_DATA =
-            new ContextKey<>(Identifier.fromNamespaceAndPath(KasugaLib.MODID, "world_models"));
     private static final Map<ClientLevel, Map<ModelInstance, Mount>> LEVELS = new IdentityHashMap<>();
 
     private RenderPearlWorldModels() {}
@@ -97,13 +92,10 @@ public final class RenderPearlWorldModels {
         List<RenderPearlModelGeometry.Batch> batches =
                 RenderPearlModelGeometry.capture(model, textures, packedLight, partialTick, event);
         if (!batches.isEmpty()) {
-            LevelRenderState state = event.getRenderState();
-            List<Draw> draws = state.getRenderData(DRAW_DATA);
-            if (draws == null) {
-                draws = new ArrayList<>();
-                state.setRenderData(DRAW_DATA, draws);
-            }
-            draws.add(new Draw(new Matrix4f(cameraRelative), batches));
+            PoseStack pose = new PoseStack();
+            pose.mulPose(cameraRelative);
+            MinecraftModelSource.Context context = new MinecraftModelSource.Context(pose, event, partialTick, packedLight);
+            for (RenderPearlModelGeometry.Batch batch : batches) context.submit(batch.layer(), batch::submit);
         }
         if (!(model.getModel().getModelData() instanceof ModelComponentsHolder holder)) return;
         ModelComponents components = holder.components();
@@ -115,23 +107,6 @@ public final class RenderPearlWorldModels {
         }
     }
 
-    @SubscribeEvent
-    public static void submit(SubmitCustomGeometryEvent event) {
-        List<Draw> draws = event.getLevelRenderState().getRenderData(DRAW_DATA);
-        if (draws == null || draws.isEmpty()) return;
-        PoseStack poseStack = event.getPoseStack();
-        for (Draw draw : draws) {
-            poseStack.pushPose();
-            try {
-                poseStack.mulPose(draw.transform());
-                for (RenderPearlModelGeometry.Batch batch : draw.batches()) {
-                    event.getSubmitNodeCollector().submitCustomGeometry(poseStack, batch.layer(), batch::submit);
-                }
-            } finally {
-                poseStack.popPose();
-            }
-        }
-    }
 
     @SubscribeEvent
     public static void unload(LevelEvent.Unload event) {
@@ -182,5 +157,4 @@ public final class RenderPearlWorldModels {
         }
     }
 
-    private record Draw(Matrix4f transform, List<RenderPearlModelGeometry.Batch> batches) {}
 }

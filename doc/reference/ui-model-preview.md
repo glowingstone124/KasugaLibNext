@@ -16,7 +16,8 @@ addRenderableWidget(widget);
 第二个参数可以指定 Bedrock 几何名称。宿主在 `Screen.removed()` 调用 `widget.close()`。
 自定义界面可用 `preview.render(graphics, x, y, width, height)` 提交预览，读取 `failure()` 获取资源加载错误，
 或通过 `instance()` 控制局部模型姿态。资源包重载时，预览会在下次绘制前关闭旧实例并重新加载。
-通过 `GuiModelPreview(RenderPearlModelSource)` 传入已有来源时，预览接管其生命周期。
+通过 `GuiModelPreview(MinecraftModelSource)` 传入已有来源时，预览接管其生命周期。
+结构预览的导入、分层和拾取见 [Minecraft 结构预览](minecraft-model-preview.md#minecraft-263)。
 
 ## Minecraft 1.21.1
 

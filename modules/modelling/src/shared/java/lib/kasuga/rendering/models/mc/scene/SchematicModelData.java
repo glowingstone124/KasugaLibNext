@@ -1,14 +1,16 @@
 package lib.kasuga.rendering.models.mc.scene;
 
-import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.nbt.*;
 import net.minecraft.util.datafix.DataFixers;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate.StructureBlockInfo;
+
+import static lib.kasuga.rendering.models.mc.scene.SchematicTags.*;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -32,36 +34,34 @@ public final class SchematicModelData {
     }
 
     public static List<StructureBlockInfo> structure(CompoundTag input, HolderGetter<Block> blocks, int paletteIndex) {
-        if (!input.contains("blocks", Tag.TAG_LIST) || !input.contains("size", Tag.TAG_LIST))
+        if (!(input.get("blocks") instanceof ListTag) || !(input.get("size") instanceof ListTag))
             throw new IllegalArgumentException("Not a vanilla structure: missing blocks/size");
         CompoundTag data = fix(input);
         ListTag palette;
-        if (data.contains("palettes", Tag.TAG_LIST)) {
-            ListTag palettes = data.getList("palettes", Tag.TAG_LIST);
+        if (data.get("palettes") instanceof ListTag) {
+            ListTag palettes = list(data, "palettes");
             if (paletteIndex < 0 || paletteIndex >= palettes.size()) throw new IllegalArgumentException("Invalid structure palette");
-            palette = (ListTag) palettes.get(paletteIndex);
+            palette = requireList(palettes.get(paletteIndex), "structure palette");
         } else {
-            if (paletteIndex != 0 || !data.contains("palette", Tag.TAG_LIST)) throw new IllegalArgumentException("Missing structure palette");
-            palette = data.getList("palette", Tag.TAG_COMPOUND);
+            if (paletteIndex != 0 || !(data.get("palette") instanceof ListTag)) throw new IllegalArgumentException("Missing structure palette");
+            palette = list(data, "palette");
         }
-        var states = palette.stream().map(t -> {
-            var state = (CompoundTag) t;
-            var id = net.minecraft.resources.ResourceLocation.tryParse(state.getString("Name"));
-            if (id == null || blocks.get(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BLOCK, id)).isEmpty())
-                throw new IllegalArgumentException("Schematic requires an unavailable block: " + state.getString("Name"));
-            return NbtUtils.readBlockState(blocks, state);
-        }).toList();
-        ListTag entries = data.getList("blocks", Tag.TAG_COMPOUND);
+        List<BlockState> states = new ArrayList<>(palette.size());
+        for (Tag tag : palette) {
+            CompoundTag state = requireCompound(tag, "palette state");
+            states.add(SchematicPlatform.readState(blocks, state));
+        }
+        ListTag entries = list(data, "blocks");
         if (entries.size() > MinecraftModelSources.MAX_BLOCKS) throw new IllegalArgumentException("Structure exceeds block limit");
-        var result = new ArrayList<StructureBlockInfo>(entries.size());
+        List<StructureBlockInfo> result = new ArrayList<>(entries.size());
         for (Tag entry : entries) {
-            var tag = (CompoundTag) entry;
-            ListTag pos = tag.getList("pos", Tag.TAG_INT);
-            if (pos.size() != 3 || !tag.contains("state", Tag.TAG_ANY_NUMERIC)) throw new IllegalArgumentException("Invalid structure block");
-            int state = tag.getInt("state");
+            CompoundTag tag = requireCompound(entry, "structure block");
+            ListTag pos = list(tag, "pos");
+            if (pos.size() != 3 || !(tag.get("state") instanceof NumericTag)) throw new IllegalArgumentException("Invalid structure block");
+            int state = integer(tag.get("state"));
             if (state < 0 || state >= states.size()) throw new IllegalArgumentException("Invalid block palette index " + state);
-            result.add(new StructureBlockInfo(new BlockPos(pos.getInt(0), pos.getInt(1), pos.getInt(2)), states.get(state),
-                    tag.contains("nbt", Tag.TAG_COMPOUND) ? tag.getCompound("nbt").copy() : null));
+            result.add(new StructureBlockInfo(new BlockPos(integer(pos.get(0)), integer(pos.get(1)), integer(pos.get(2))), states.get(state),
+                    tag.get("nbt") instanceof CompoundTag nbt ? nbt.copy() : null));
         }
         return List.copyOf(result);
     }
@@ -71,32 +71,32 @@ public final class SchematicModelData {
     }
 
     public static List<StructureBlockInfo> litematic(CompoundTag root, HolderGetter<Block> blocks) {
-        int version = root.getInt("Version");
-        if (version < 5 || version > 7 || !root.contains("Regions", Tag.TAG_COMPOUND))
+        int version = integer(root.get("Version"));
+        if (version < 5 || version > 7 || !(root.get("Regions") instanceof CompoundTag))
             throw new IllegalArgumentException("Expected Litematica/Forgematica v5-v7 with Regions");
-        int dataVersion = root.getInt("MinecraftDataVersion");
+        int dataVersion = integer(root.get("MinecraftDataVersion"));
         if (dataVersion <= 0) throw new IllegalArgumentException("Litematic has no MinecraftDataVersion");
         Map<BlockPos, StructureBlockInfo> result = new LinkedHashMap<>();
-        CompoundTag regions = root.getCompound("Regions");
-        if (regions.getAllKeys().size() > 256) throw new IllegalArgumentException("Too many schematic regions");
+        CompoundTag regions = compound(root, "Regions");
+        if (SchematicPlatform.keys(regions).size() > 256) throw new IllegalArgumentException("Too many schematic regions");
         long totalVolume = 0;
         // Stable order makes overlapping subregion precedence repeatable.
-        for (String name : regions.getAllKeys().stream().sorted().toList()) {
-            CompoundTag region = regions.getCompound(name);
-            BlockPos size = vector(region.getCompound("Size"));
+        for (String name : SchematicPlatform.keys(regions).stream().sorted().toList()) {
+            CompoundTag region = compound(regions, name);
+            BlockPos size = vector(compound(region, "Size"));
             int sx = dimension(size.getX()), sy = dimension(size.getY()), sz = dimension(size.getZ());
             totalVolume += (long) sx * sy * sz;
             if (totalVolume > MinecraftModelSources.MAX_BLOCKS) throw new IllegalArgumentException("Litematic volume exceeds block limit");
-            BlockPos start = vector(region.getCompound("Position"));
+            BlockPos start = vector(compound(region, "Position"));
             BlockPos minimum = start.offset(negativeOffset(size.getX()), negativeOffset(size.getY()), negativeOffset(size.getZ()));
-            ListTag palette = region.getList("BlockStatePalette", Tag.TAG_COMPOUND);
+            ListTag palette = list(region, "BlockStatePalette");
             if (palette.isEmpty() || palette.size() > MinecraftModelSources.MAX_BLOCKS) throw new IllegalArgumentException("Invalid litematic palette");
             int bits = Math.max(2, 32 - Integer.numberOfLeadingZeros(palette.size() - 1));
-            long[] packed = region.getLongArray("BlockStates");
+            long[] packed = longs(region, "BlockStates");
             if (packed.length != ((long) sx * sy * sz * bits + 63) / 64) throw new IllegalArgumentException("Invalid litematic BlockStates length");
             Map<BlockPos, CompoundTag> entities = new LinkedHashMap<>();
-            for (Tag entry : region.getList("TileEntities", Tag.TAG_COMPOUND)) {
-                CompoundTag entity = (CompoundTag) entry;
+            for (Tag entry : list(region, "TileEntities")) {
+                CompoundTag entity = requireCompound(entry, "block entity");
                 entities.put(vector(entity), entity);
             }
             CompoundTag vanilla = new CompoundTag();
@@ -115,7 +115,7 @@ public final class SchematicModelData {
                 entries.add(entry);
             }
             vanilla.put("blocks", entries);
-            for (var info : structure(vanilla, blocks, 0)) {
+            for (StructureBlockInfo info : structure(vanilla, blocks, 0)) {
                 BlockPos position = info.pos().offset(minimum);
                 result.put(position, new StructureBlockInfo(position, info.state(), info.nbt()));
             }
@@ -143,9 +143,9 @@ public final class SchematicModelData {
         return Math.abs(value);
     }
     private static BlockPos vector(CompoundTag tag) {
-        if (!tag.contains("x", Tag.TAG_ANY_NUMERIC) || !tag.contains("y", Tag.TAG_ANY_NUMERIC) || !tag.contains("z", Tag.TAG_ANY_NUMERIC))
+        if (!(tag.get("x") instanceof NumericTag) || !(tag.get("y") instanceof NumericTag) || !(tag.get("z") instanceof NumericTag))
             throw new IllegalArgumentException("Incomplete schematic position/size");
-        return new BlockPos(tag.getInt("x"), tag.getInt("y"), tag.getInt("z"));
+        return new BlockPos(integer(tag.get("x")), integer(tag.get("y")), integer(tag.get("z")));
     }
     private static ListTag integers(int x, int y, int z) {
         ListTag list = new ListTag();
@@ -154,7 +154,7 @@ public final class SchematicModelData {
     }
     private static CompoundTag fix(CompoundTag input) {
         int version = NbtUtils.getDataVersion(input, 500);
-        if (version > SharedConstants.getCurrentVersion().getDataVersion().getVersion())
+        if (version > SchematicPlatform.dataVersion())
             throw new IllegalArgumentException("Schematic comes from a newer Minecraft version");
         return DataFixTypes.STRUCTURE.updateToCurrentVersion(DataFixers.getDataFixer(), input.copy(), version);
     }

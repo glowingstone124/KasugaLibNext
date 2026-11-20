@@ -170,6 +170,13 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
     @Override protected Snapshot contentSnapshot(LayerLayout layout, float partialTick) {
         if (model.isClosed() || !layout.includes(0)) return null;
         return new Snapshot(bounds, List.of(new Part("model", 0, bounds, context -> {
+            if (context.extraction() == null) {
+                for (RenderPearlModelGeometry.Batch batch : RenderPearlModelGeometry.capture(
+                        model, textures, context.packedLight(), context.partialTick(), context.frameToken())) {
+                    context.submit(batch.layer(), batch::submit);
+                }
+                return;
+            }
             Matrix4f matrix = context.pose().last().pose();
             Vec3 camera = context.extraction().getCamera().position();
             Matrix4d world = new Matrix4d().translation(camera.x, camera.y, camera.z).mul(new Matrix4d(matrix));

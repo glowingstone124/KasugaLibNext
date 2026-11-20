@@ -1,19 +1,21 @@
 package lib.kasuga.rendering.models.mc.scene;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
+import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.Vec3;
-import java.util.Optional;
-
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Render-thread-owned model, backed by native Minecraft/mod renderers or UML geometry.
@@ -79,8 +81,22 @@ public interface MinecraftModelSource extends AutoCloseable {
         return new Vec3(result.x, result.y, result.z);
     }
 
-    /** Camera-relative placement and the frame being extracted for RenderPearl. */
-    record Context(PoseStack pose, ExtractLevelRenderStateEvent extraction, float partialTick, int packedLight) {}
+    /** Captures commands during level extraction or submits them to the active GUI preview. */
+    record Context(PoseStack pose, @Nullable ExtractLevelRenderStateEvent extraction, @Nullable SubmitNodeCollector nodes,
+                   Object frameToken, float partialTick, int packedLight) {
+        public Context(PoseStack pose, ExtractLevelRenderStateEvent extraction, float partialTick, int packedLight) {
+            this(pose, extraction, null, extraction, partialTick, packedLight);
+        }
+
+        public Context(PoseStack pose, SubmitNodeCollector nodes, Object frameToken, float partialTick, int packedLight) {
+            this(pose, null, nodes, frameToken, partialTick, packedLight);
+        }
+
+        public void submit(RenderType layer, SubmitNodeCollector.CustomGeometryRenderer geometry) {
+            if (nodes != null) nodes.submitCustomGeometry(pose, layer, geometry);
+            else SceneGeometry.add(extraction, pose, layer, geometry);
+        }
+    }
 
     /** Renderer and bounds describe one frame. Borrowed callbacks are valid until the next snapshot or close. */
     record Part(String id, int layer, ModelBounds bounds, Renderer renderer, Picker picker) {

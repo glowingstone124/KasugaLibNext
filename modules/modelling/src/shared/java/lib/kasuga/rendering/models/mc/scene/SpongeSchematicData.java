@@ -7,6 +7,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate.StructureBlockInfo;
 import java.util.*;
 
+import static lib.kasuga.rendering.models.mc.scene.SchematicTags.*;
+
 /** Sponge/WorldEdit .schem v2/v3 converted through the existing vanilla structure data-fixer.
  * Schema: https://github.com/SpongePowered/Schematic-Specification/tree/master/versions
  * Entities/biomes are not world objects in a block-model preview; block-entity NBT is retained.
@@ -14,34 +16,34 @@ import java.util.*;
 public final class SpongeSchematicData {
     private SpongeSchematicData() {}
     public static List<StructureBlockInfo> decode(CompoundTag input,HolderGetter<Block> blocks) {
-        var root=input.contains("Schematic",Tag.TAG_COMPOUND)?input.getCompound("Schematic"):input;
-        int version=root.getInt("Version");
+        var root=input.get("Schematic") instanceof CompoundTag schematic ? schematic : input;
+        int version=integer(root.get("Version"));
         if(version!=2&&version!=3)throw new IllegalArgumentException("Expected Sponge schematic v2/v3");
-        if(root.getInt("DataVersion")<=0)throw new IllegalArgumentException("Sponge schematic has no DataVersion");
+        if(integer(root.get("DataVersion"))<=0)throw new IllegalArgumentException("Sponge schematic has no DataVersion");
         int sx=dimension(root,"Width"),sy=dimension(root,"Height"),sz=dimension(root,"Length");
         long volume=(long)sx*sy*sz;
         if(volume>MinecraftModelSources.MAX_BLOCKS)throw new IllegalArgumentException("Sponge schematic volume exceeds block limit");
-        var container=version==3?root.getCompound("Blocks"):root;
-        var palette=container.getCompound("Palette");
+        var container=version==3?compound(root, "Blocks"):root;
+        var palette=compound(container, "Palette");
         if(palette.isEmpty()||palette.size()>MinecraftModelSources.MAX_BLOCKS)throw new IllegalArgumentException("Invalid Sponge palette");
         var compact=new HashMap<Integer,Integer>();var states=new ListTag();
-        for(var name:palette.getAllKeys().stream().sorted().toList()) {
-            if(!palette.contains(name,Tag.TAG_INT)||palette.getInt(name)<0)throw new IllegalArgumentException("Invalid Sponge palette index");
-            if(compact.put(palette.getInt(name),states.size())!=null)throw new IllegalArgumentException("Duplicate Sponge palette index");
+        for(var name:SchematicPlatform.keys(palette).stream().sorted().toList()) {
+            if(!(palette.get(name) instanceof IntTag)||integer(palette.get(name))<0)throw new IllegalArgumentException("Invalid Sponge palette index");
+            if(compact.put(integer(palette.get(name)),states.size())!=null)throw new IllegalArgumentException("Duplicate Sponge palette index");
             states.add(stateTag(name));
         }
         String dataKey=version==3?"Data":"BlockData";
-        if(!container.contains(dataKey,Tag.TAG_BYTE_ARRAY))throw new IllegalArgumentException("Missing Sponge block data");
-        int[] indices=decodeVarints(container.getByteArray(dataKey),(int)volume);
-        int[] offset=root.contains("Offset",Tag.TAG_INT_ARRAY)?root.getIntArray("Offset"):new int[]{0,0,0};
+        if(!(container.get(dataKey) instanceof ByteArrayTag))throw new IllegalArgumentException("Missing Sponge block data");
+        int[] indices=decodeVarints(bytes(container, dataKey),(int)volume);
+        int[] offset=root.get("Offset") instanceof IntArrayTag ? intArray(root, "Offset"):new int[]{0,0,0};
         if(offset.length!=3)throw new IllegalArgumentException("Invalid Sponge offset");
         var entities=new HashMap<BlockPos,CompoundTag>();
-        for(var tag:container.getList("BlockEntities",Tag.TAG_COMPOUND)) {
-            var entity=(CompoundTag)tag;int[] pos=entity.getIntArray("Pos");
+        for(var tag:list(container, "BlockEntities")) {
+            var entity=requireCompound(tag, "Sponge block entity");int[] pos=intArray(entity, "Pos");
             if(pos.length!=3||pos[0]<0||pos[0]>=sx||pos[1]<0||pos[1]>=sy||pos[2]<0||pos[2]>=sz)
                 throw new IllegalArgumentException("Invalid Sponge block entity position");
-            var data=version==3?entity.getCompound("Data").copy():entity.copy();
-            data.remove("Pos");data.remove("Id");data.putString("id",entity.getString("Id"));
+            var data=version==3?compound(entity, "Data").copy():entity.copy();
+            data.remove("Pos");data.remove("Id");data.putString("id",string(entity, "Id"));
             var position=new BlockPos(pos[0],pos[1],pos[2]);
             if(entities.put(position,data)!=null)throw new IllegalArgumentException("Duplicate Sponge block entity");
         }
@@ -53,7 +55,7 @@ public final class SpongeSchematicData {
             var nbt=entities.get(new BlockPos(x,y,z));if(nbt!=null)entry.put("nbt",nbt);
             entries.add(entry);
         }
-        var vanilla=new CompoundTag();vanilla.putInt("DataVersion",root.getInt("DataVersion"));
+        var vanilla=new CompoundTag();vanilla.putInt("DataVersion",integer(root.get("DataVersion")));
         vanilla.put("size",ints(sx,sy,sz));vanilla.put("palette",states);vanilla.put("blocks",entries);
         return SchematicModelData.structure(vanilla,blocks,0).stream().map(info->{
             var p=info.pos();var position=new BlockPos(Math.addExact(p.getX(),offset[0]),Math.addExact(p.getY(),offset[1]),Math.addExact(p.getZ(),offset[2]));
@@ -90,8 +92,8 @@ public final class SpongeSchematicData {
         tag.put("Properties",props);return tag;
     }
     private static int dimension(CompoundTag root,String name) {
-        if(!root.contains(name,Tag.TAG_SHORT))throw new IllegalArgumentException("Missing Sponge dimension "+name);
-        int size=root.getShort(name)&65535;
+        if(!(root.get(name) instanceof ShortTag))throw new IllegalArgumentException("Missing Sponge dimension "+name);
+        int size=integer(root.get(name))&65535;
         if(size==0||size>MinecraftModelSources.MAX_SPAN)throw new IllegalArgumentException("Invalid Sponge dimension");
         return size;
     }

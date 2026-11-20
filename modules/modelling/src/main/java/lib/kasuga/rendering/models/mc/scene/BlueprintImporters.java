@@ -21,9 +21,9 @@ public final class BlueprintImporters {
     private record Format(ResourceLocation id, Predicate<CompoundTag> matches, Decoder decoder) {}
     private static final List<Format> FORMATS=new ArrayList<>();
     static {
-        register(ResourceLocation.parse("minecraft:structure"),r->r.contains("blocks",Tag.TAG_LIST)&&r.contains("size",Tag.TAG_LIST),(r,b)->SchematicModelData.structure(r,b,0));
-        register(ResourceLocation.parse("kasuga_lib:litematic"),r->r.contains("Regions",Tag.TAG_COMPOUND),SchematicModelData::litematic);
-        register(ResourceLocation.parse("kasuga_lib:sponge"),r->r.contains("Schematic",Tag.TAG_COMPOUND)||r.contains("Width",Tag.TAG_SHORT),SpongeSchematicData::decode);
+        register(ResourceLocation.parse("minecraft:structure"),r->r.get("blocks") instanceof ListTag && r.get("size") instanceof ListTag,(r,b)->SchematicModelData.structure(r,b,0));
+        register(ResourceLocation.parse("kasuga_lib:litematic"),r->r.get("Regions") instanceof CompoundTag,SchematicModelData::litematic);
+        register(ResourceLocation.parse("kasuga_lib:sponge"),r->r.get("Schematic") instanceof CompoundTag || r.get("Width") instanceof ShortTag,SpongeSchematicData::decode);
     }
     private BlueprintImporters() {}
     public static synchronized void register(ResourceLocation id, Predicate<CompoundTag> matches, Decoder decoder) {

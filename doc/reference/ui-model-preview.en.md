@@ -17,8 +17,9 @@ The optional second argument selects a named Bedrock geometry. The owning screen
 `widget.close()` from `Screen.removed()`. Custom screens can call
 `preview.render(graphics, x, y, width, height)`, check `failure()` for resource loading errors,
 and use `instance()` to pose the local model. Resource pack reloads close and replace the old
-instance on the next draw. The `GuiModelPreview(RenderPearlModelSource)` overload takes ownership
-of the supplied source.
+instance on the next draw. The `GuiModelPreview(MinecraftModelSource)` overload takes ownership
+of the supplied source. See [Minecraft structure previews](minecraft-model-preview.en.md#minecraft-263)
+for structure import, slicing, and block picking.
 
 ## Minecraft 1.21.1
 

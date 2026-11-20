@@ -107,7 +107,7 @@ public final class GuiPreviewSmoke {
                     throw new IllegalStateException("Removing the screen did not close its previews");
                 }
                 LOGGER.info("KASUGA_GUI_PREVIEW_PASS two-panels,depth-canvas,camera,resize,scissor,reload,closed");
-                client.stop();
+                StructurePreviewSmoke.start(client);
             }
         }
     }

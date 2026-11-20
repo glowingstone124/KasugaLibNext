@@ -1,5 +1,25 @@
 # Minecraft structures and Create model previews
 
+## Minecraft 26.3
+
+```java
+BlockModelSource source = MinecraftModelSources.structure(level, Identifier.parse("minecraft:end_city/base_floor"));
+GuiModelPreview preview = new GuiModelPreview(source);
+preview.setLayers(LayerLayout.ASSEMBLED.range(0, 5).separation(.5));
+```
+
+Use `structure(level, path)`, `litematic(level, path)`, or `blueprint(level, path)` for files.
+`blueprint` detects vanilla structure NBT, Litematic, and Sponge v2/v3 by their contents.
+`capture(level, minimum, maximum)` reads an already loaded region.
+
+The source API works with vanilla `ModelPreviewWidget` and `SceneModels`. Close widgets from
+`Screen.removed()`. Closing a scene releases the sources it owns. `preview.pick(x, y)` reports
+the original block position and block state using normalized viewport coordinates. Both graphics
+backends use Minecraft's baked block and fluid geometry. `BlockModelSource.blockEntityData(position)`
+returns imported block entity NBT. Block entity rendering is still being ported.
+
+## Minecraft 1.21.1
+
 `lib.kasuga.rendering.models.mc.scene.MinecraftModelSource` is the common display contract for
 Minecraft content and Kasuga models. Pass a source to `GuiModelPreview`, then use
 `ModelPreviewWidget`, LDLib2's `ModelPreviewElement`, or a `UIBackend` world panel. Contents are

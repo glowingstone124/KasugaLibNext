@@ -5,10 +5,12 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import lib.kasuga.KasugaLib;
-import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
 import lib.kasuga.rendering.models.mc.backend.ui.ModelPreviewCamera;
 import lib.kasuga.rendering.models.mc.renderpearl.RenderPearlModelSource;
+import lib.kasuga.rendering.models.mc.scene.LayerLayout;
+import lib.kasuga.rendering.models.mc.scene.MinecraftModelSource;
 import lib.kasuga.rendering.models.mc.scene.ModelBounds;
+import lib.kasuga.rendering.models.mc.scene.ModelPreviewResources;
 import lib.kasuga.rendering.models.mc.typo.KsgMinecraftJsonLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import net.minecraft.client.Minecraft;
@@ -19,6 +21,7 @@ import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -26,20 +29,25 @@ import net.neoforged.neoforge.client.event.RegisterPictureInPictureRenderersEven
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3x2f;
 import org.joml.Matrix3x2fc;
+import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
+import org.joml.Vector3f;
 
 import java.io.IOException;
 import java.util.Objects;
+import java.util.Optional;
 
 /** Owns a local RenderPearl model and submits it to Minecraft's depth-buffered GUI renderer. */
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
 public final class GuiModelPreview implements AutoCloseable {
-    private static long resourceGeneration;
     private final @Nullable Identifier resource;
     private final @Nullable String modelName;
-    private @Nullable RenderPearlModelSource source;
+    private @Nullable MinecraftModelSource source;
     private long openedGeneration = -1;
     private volatile View view = new View(0, 0, 1, 0, 0);
+    private volatile LayerLayout layers = LayerLayout.ASSEMBLED;
+    private @Nullable MinecraftModelSource.Snapshot pickFrame;
+    private @Nullable Matrix4f pickMatrix;
     private @Nullable String failure;
     private boolean closed;
 
@@ -49,20 +57,18 @@ public final class GuiModelPreview implements AutoCloseable {
     }
 
     /** Takes ownership of the supplied source. */
-    public GuiModelPreview(RenderPearlModelSource source) {
+    public GuiModelPreview(MinecraftModelSource source) {
         this.resource = null;
         this.modelName = null;
         this.source = Objects.requireNonNull(source, "source");
     }
 
+    public void setLayers(LayerLayout layers) { this.layers = Objects.requireNonNull(layers, "layers"); }
+    public LayerLayout layers() { return layers; }
+
     @SubscribeEvent
     public static void registerRenderer(RegisterPictureInPictureRenderersEvent event) {
         event.register(PreviewState.class, Renderer::new);
-    }
-
-    @SubscribeEvent
-    public static void resourcesReloaded(ClientResourceReloadFinishEvent event) {
-        resourceGeneration++;
     }
 
     public void setView(float yaw, float pitch, float zoom) {
@@ -86,30 +92,48 @@ public final class GuiModelPreview implements AutoCloseable {
     /** Samples the local model with an interpolation fraction in [0, 1]. */
     public boolean render(GuiGraphicsExtractor graphics, float x, float y, int width, int height, float partialTick) {
         RenderSystem.assertOnRenderThread();
+        pickFrame = null;
+        pickMatrix = null;
         if (closed || width <= 0 || height <= 0) return false;
         refresh();
-        if (source == null || source.isClosed() || source.instance().isClosed()) return false;
+        if (source == null) return false;
 
         Matrix3x2f placement = new Matrix3x2f(graphics.pose()).translate(x, y);
         ScreenRectangle scissor = graphics.peekScissorStack();
         ScreenRectangle bounds = PictureInPictureRenderState.getBounds(0, 0, width, height, placement, scissor);
         if (bounds == null) return false;
+        MinecraftModelSource.Snapshot snapshot = source.snapshot(layers, partialTick);
+        if (snapshot == null) return false;
         View camera = view;
-        ModelBounds modelBounds = source.bounds();
+        ModelBounds modelBounds = snapshot.bounds();
         ModelPreviewCamera.Frame frame = ModelPreviewCamera.frame(modelBounds.minimum(), modelBounds.maximum(),
                 (float) width / height, camera.yaw(), camera.pitch(), camera.zoom(), camera.panX(), camera.panY());
         float scale = frame.projection().m11() * height * .5f;
         float depthRadius = -.25f / frame.projection().m22();
-        RenderPearlModelSource.Geometry geometry = source.captureGeometry(partialTick, graphics, LightCoordsUtil.FULL_BRIGHT);
+        pickFrame = snapshot;
+        pickMatrix = new Matrix4f(frame.projection()).mul(frame.modelView()).invert();
         graphics.submitPictureInPictureRenderState(
-                new PreviewState(width, height, scale, placement, scissor, bounds, frame.modelView(), depthRadius, geometry));
+                new PreviewState(width, height, scale, placement, scissor, bounds,
+                        frame.modelView(), depthRadius, snapshot, graphics, partialTick));
         return true;
     }
 
+    /** Picks from the last extracted preview using coordinates normalized to its local viewport. */
+    public Optional<MinecraftModelSource.BlockHit> pick(double x, double y) {
+        RenderSystem.assertOnRenderThread();
+        if (pickFrame == null || pickMatrix == null || !(x >= 0 && x <= 1 && y >= 0 && y <= 1)) return Optional.empty();
+        float nx = (float) (2 * x - 1);
+        float ny = (float) (1 - 2 * y);
+        Vector3f from = pickMatrix.transformProject(new Vector3f(nx, ny, -1));
+        Vector3f to = pickMatrix.transformProject(new Vector3f(nx, ny, 1));
+        return pickFrame.pick(new Vec3(from), new Vec3(to));
+    }
+
     private void refresh() {
-        if (resource == null || resourceGeneration == openedGeneration) return;
+        long generation = ModelPreviewResources.generation();
+        if (resource == null || generation == openedGeneration) return;
         releaseSource();
-        openedGeneration = resourceGeneration;
+        openedGeneration = generation;
         try {
             source = modelName != null && resource.getPath().endsWith(".geo.json")
                     ? KsgMinecraftJsonLoader.openBedrock(resource, modelName, null)
@@ -120,7 +144,9 @@ public final class GuiModelPreview implements AutoCloseable {
         }
     }
 
-    public @Nullable ModelInstance instance() { return source == null ? null : source.instance(); }
+    public @Nullable ModelInstance instance() {
+        return source instanceof RenderPearlModelSource model ? model.instance() : null;
+    }
     public @Nullable String failure() { return failure; }
     public boolean isClosed() { return closed; }
 
@@ -128,11 +154,13 @@ public final class GuiModelPreview implements AutoCloseable {
         RenderSystem.assertOnRenderThread();
         if (closed) return;
         closed = true;
+        pickFrame = null;
+        pickMatrix = null;
         releaseSource();
     }
 
     private void releaseSource() {
-        RenderPearlModelSource previous = source;
+        MinecraftModelSource previous = source;
         source = null;
         if (previous != null) previous.close();
     }
@@ -141,8 +169,8 @@ public final class GuiModelPreview implements AutoCloseable {
 
     private record PreviewState(int x1, int y1, float scale, Matrix3x2fc pose,
                                 @Nullable ScreenRectangle scissorArea, ScreenRectangle bounds,
-                                Matrix4fc view, float depthRadius,
-                                RenderPearlModelSource.Geometry geometry) implements PictureInPictureRenderState {
+                                Matrix4fc view, float depthRadius, MinecraftModelSource.Snapshot snapshot,
+                                Object frameToken, float partialTick) implements PictureInPictureRenderState {
         @Override public int x0() { return 0; }
         @Override public int y0() { return 0; }
     }
@@ -159,7 +187,8 @@ public final class GuiModelPreview implements AutoCloseable {
             if (scaledRadius > 500f) pose.scale(1, 1, 500f / scaledRadius);
             pose.rotateDegrees(Axis.XP, 180f);
             pose.mulPose(state.view());
-            state.geometry().submit(pose, nodes);
+            state.snapshot().render(new MinecraftModelSource.Context(
+                    pose, nodes, state.frameToken(), state.partialTick(), LightCoordsUtil.FULL_BRIGHT));
         }
     }
 }

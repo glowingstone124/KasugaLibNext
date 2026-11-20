@@ -7,6 +7,7 @@ import lib.kasuga.KasugaLib;
 import lib.kasuga.host.FsmClientSmoke;
 import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.models.mc.backend.GuiPreviewSmoke;
+import lib.kasuga.rendering.models.mc.backend.StructurePreviewSmoke;
 import lib.kasuga.host.ResourcePackSmoke;
 import lib.kasuga.host.RegistrationSmoke;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
@@ -34,6 +35,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.ViewportEvent;
 import org.joml.Matrix4f;
 import org.joml.Vector3fc;
 import org.slf4j.Logger;
@@ -80,6 +82,14 @@ public final class RenderPearlClientSmoke {
     }
 
     private RenderPearlClientSmoke() {}
+
+    @SubscribeEvent
+    public static void holdSmokeCamera(ViewportEvent.ComputeCameraAngles event) {
+        if (!cameraRequested) return;
+        event.setYaw(0);
+        event.setPitch(0);
+        event.setRoll(0);
+    }
 
     @SubscribeEvent
     public static void tick(ClientTickEvent.Post event) throws IOException {
@@ -175,7 +185,8 @@ public final class RenderPearlClientSmoke {
     public static void afterFrame(RenderFrameEvent.Post event) {
         if (modelsVerified) {
             Minecraft client = Minecraft.getInstance();
-            if (GuiPreviewSmoke.started()) GuiPreviewSmoke.afterFrame(client);
+            if (StructurePreviewSmoke.started()) StructurePreviewSmoke.afterFrame(client);
+            else if (GuiPreviewSmoke.started()) GuiPreviewSmoke.afterFrame(client);
             else DocumentSmoke.afterFrame(client);
             return;
         }
