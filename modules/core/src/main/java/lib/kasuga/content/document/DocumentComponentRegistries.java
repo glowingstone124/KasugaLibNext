@@ -4,8 +4,6 @@ import com.mojang.serialization.Codec;
 import io.micronaut.context.annotation.Context;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.KasugaLibApplication;
-import lib.kasuga.content.device.DeviceRegistries;
-import lib.kasuga.content.device.DeviceType;
 import lib.kasuga.core.codec.KasugaCodec;
 import lib.kasuga.registration.minecraft.data_component.DataComponentReg;
 import lib.kasuga.registration.minecraft.registry.RegistryReg;
@@ -16,7 +14,6 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.registries.NewRegistryEvent;
 import net.neoforged.neoforge.registries.RegistryBuilder;
 
 import java.util.HashMap;

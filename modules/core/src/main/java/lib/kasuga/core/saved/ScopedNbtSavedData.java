@@ -1,20 +1,25 @@
 package lib.kasuga.core.saved;
 
-import com.electronwill.nightconfig.core.AbstractConfig;
+import com.mojang.logging.LogUtils;
 import com.mojang.datafixers.DataFixer;
-import net.minecraft.client.searchtree.SearchTree;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
+import net.neoforged.neoforge.common.IOUtilities;
+import org.slf4j.Logger;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 public class ScopedNbtSavedData<T extends SavedData> extends CustomSavedData {
+    private static final Logger LOGGER = LogUtils.getLogger();
     private final Path path;
     private final SavedData.Factory<T> factory;
 
@@ -38,10 +43,16 @@ public class ScopedNbtSavedData<T extends SavedData> extends CustomSavedData {
     }
     @Override
     public void save(Path path, HolderLookup.Provider provider) {
-        for (String data : pendingRemove) {
-            File f = new File(this.path.toFile(), data + ".nbt");
-            if(f.exists()) {
-                f.delete();
+        if (!pendingRemove.isEmpty()) IOUtilities.waitUntilIOWorkerComplete();
+        Iterator<String> keys = pendingRemove.iterator();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            try {
+                Files.deleteIfExists(this.path.resolve(key + ".dat"));
+                Files.deleteIfExists(this.path.resolve(key + ".nbt"));
+                keys.remove();
+            } catch (IOException failure) {
+                LOGGER.warn("Could not remove scoped saved data {}", this.path.resolve(key), failure);
             }
         }
 
@@ -67,18 +78,21 @@ public class ScopedNbtSavedData<T extends SavedData> extends CustomSavedData {
     public List<String> getAllSavedNames() {
         File[] files = this.path.toFile().listFiles();
         if(files == null) return List.of();
-        ArrayList<String> list = new ArrayList<>();
+        Set<String> keys = new LinkedHashSet<>();
         for (File file : files) {
-            if(file.isFile() && file.getName().endsWith(".nbt")) {
-                String fileName = file.getName();
-                String baseName = fileName.substring(0, fileName.length() - 4); // remove .nbt
-                list.add(baseName);
+            String name = file.getName();
+            if (file.isFile() && (name.endsWith(".dat") || name.endsWith(".nbt"))) {
+                keys.add(name.substring(0, name.length() - 4));
             }
         }
-        return list;
+        return List.copyOf(keys);
     }
 
     public void remove(String data) {
+        Path target = this.path.resolve(data + ".dat").normalize();
+        if (!target.startsWith(this.path.normalize())) {
+            throw new IllegalArgumentException("Saved data path escapes its scope: " + data);
+        }
         //noinspection DataFlowIssue
         this.dimensionDataStorage.set(data, null);
         this.pendingRemove.add(data);

@@ -11,6 +11,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 public class GlobalDeviceSavedData extends SavedData {
 
@@ -21,8 +22,10 @@ public class GlobalDeviceSavedData extends SavedData {
     protected CompoundTag data = new CompoundTag();
 
     protected List<DeviceAttribute> attributes = new ArrayList<>();
+    private final CompoundTag unresolvedAttributes = new CompoundTag();
 
     public GlobalDeviceSavedData(CompoundTag tag, HolderLookup.Provider provider) {
+        type = tag.contains("type") ? ResourceLocation.tryParse(tag.getString("type")) : null;
         data = tag.getCompound("deviceData");
 
         CompoundTag attributes = tag.getCompound("attributes");
@@ -39,6 +42,8 @@ public class GlobalDeviceSavedData extends SavedData {
             if (type != null) {
                 DeviceAttribute attribute = type.factory().apply(attributeTag.getCompound("data"), provider);
                 this.attributes.add(attribute);
+            } else {
+                unresolvedAttributes.put(allKey, attributeTag.copy());
             }
         }
     }
@@ -51,7 +56,7 @@ public class GlobalDeviceSavedData extends SavedData {
     }
 
     public void save(Device device) {
-        if(DeviceRegistries.DEVICE.getKey(device.getType()) != this.type) {
+        if (!Objects.equals(DeviceRegistries.DEVICE.getKey(device.getType()), type)) {
             return;
         }
         device.load(this.data);
@@ -87,11 +92,13 @@ public class GlobalDeviceSavedData extends SavedData {
 
     @Override
     public CompoundTag save(CompoundTag compoundTag, HolderLookup.Provider provider) {
+        if (type != null) compoundTag.putString("type", type.toString());
         compoundTag.put("deviceData", data);
 
-        CompoundTag attributesTag = new CompoundTag();
+        CompoundTag attributesTag = unresolvedAttributes.copy();
 
         for (DeviceAttribute attribute : attributes) {
+            if (!attribute.getType().persistent()) continue;
             CompoundTag attributeTag = new CompoundTag();
             attributeTag.put("data", attribute.save(new CompoundTag(), provider));
             String key = DeviceRegistries.DEVICE_ATTRIBUTE.getKey(attribute.getType()).toString();

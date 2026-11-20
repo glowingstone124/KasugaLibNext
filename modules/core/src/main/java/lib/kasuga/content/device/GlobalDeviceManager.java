@@ -9,10 +9,12 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import org.slf4j.Logger;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Context()
@@ -37,9 +39,11 @@ public class GlobalDeviceManager {
         HashMap<UUID, GlobalDeviceSavedData> allSavedData = new HashMap<>();
         for (String savedName : manager.getAllSavedNames()) {
             try{
-                GlobalDeviceSavedData data = manager.computeIfAbsent(savedName);
                 UUID id = UUID.fromString(savedName);
-                devices.put(id, data.create());
+                GlobalDeviceSavedData data = manager.get(savedName);
+                Device device = data == null ? null : data.create();
+                if (device == null) continue;
+                devices.put(id, device);
                 allSavedData.put(id, data);
             }catch (RuntimeException e) {
                 LOGGER.error(e.getLocalizedMessage());
@@ -49,38 +53,76 @@ public class GlobalDeviceManager {
     }
 
     public void onServerStopped(ServerStoppingEvent event) {
-        manager = null;
+        if (manager == null) return;
+        try {
+            manager.save(dataManager.getLevelPath(event.getServer()), event.getServer().registryAccess());
+        } finally {
+            manager = null;
+            devices.clear();
+            index.primaryIndex.clear();
+            index.indexable.clear();
+        }
+    }
+
+    public @Nullable Device get(UUID id) {
+        return devices.get(id);
+    }
+
+    public @Nullable Device put(UUID id, Device device) {
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(device, "device");
+        if (manager == null) throw new IllegalStateException("Global devices require a running server");
+        if (DeviceRegistries.DEVICE.getKey(device.getType()) == null) {
+            throw new IllegalArgumentException("Unregistered device type");
+        }
+        GlobalDeviceSavedData data = manager.computeIfAbsent(id.toString());
+        Device previous = devices.put(id, device);
+        if (previous == null) {
+            for (DeviceAttribute attribute : data.attributes) index.notifyAttributeAdded(id, attribute);
+        }
+        device.setDirty();
+        return previous;
+    }
+
+    public List<UUID> queryAttribute(DeviceAttribute attribute) {
+        return index.queryAttribute(attribute);
     }
 
     public void saveToData() {
+        if (manager == null) return;
         for (Map.Entry<UUID, Device> idDeviceEntry : this.devices.entrySet()) {
             if(!idDeviceEntry.getValue().isDirty())
                 continue;
             GlobalDeviceSavedData savedData = manager.computeIfAbsent(idDeviceEntry.getKey().toString());
             savedData.load(idDeviceEntry.getValue());
             savedData.setDirty();
-
+            idDeviceEntry.getValue().cleanDirty();
         }
     }
 
     public void addAttribute(UUID deviceId, DeviceAttribute attribute) {
         if(!this.devices.containsKey(deviceId))
             return;
+        GlobalDeviceSavedData data = manager.computeIfAbsent(deviceId.toString());
+        if (data.attributes.contains(attribute)) return;
+        data.attributes.add(attribute);
         index.notifyAttributeAdded(deviceId, attribute);
-        manager.computeIfAbsent(deviceId.toString()).attributes.add(attribute);
+        data.setDirty();
     }
 
     public void removeAttribute(UUID deviceId, DeviceAttribute attribute) {
         if(!this.devices.containsKey(deviceId))
             return;
+        GlobalDeviceSavedData data = manager.computeIfAbsent(deviceId.toString());
+        if (!data.attributes.remove(attribute)) return;
         index.notifyAttributeRemoved(deviceId, attribute);
-        manager.computeIfAbsent(deviceId.toString()).attributes.remove(attribute);
+        data.setDirty();
     }
 
     public List<DeviceAttribute> getAttributes(UUID deviceId) {
         if(!this.devices.containsKey(deviceId))
             return List.of();
-        return manager.computeIfAbsent(deviceId.toString()).attributes;
+        return List.copyOf(manager.computeIfAbsent(deviceId.toString()).attributes);
     }
 
     public void remove(UUID deviceId) {
@@ -94,11 +136,12 @@ public class GlobalDeviceManager {
     }
 
     public void merge(UUID target, UUID from) {
-        if(!this.devices.containsKey(target) || !this.devices.containsKey(from))
+        if(target.equals(from) || !this.devices.containsKey(target) || !this.devices.containsKey(from))
             return;
         Device targetDevice = this.devices.get(target);
         Device fromDevice = this.devices.get(from);
-        remove(from);
         targetDevice.acceptMerge(fromDevice);
+        targetDevice.setDirty();
+        remove(from);
     }
 }

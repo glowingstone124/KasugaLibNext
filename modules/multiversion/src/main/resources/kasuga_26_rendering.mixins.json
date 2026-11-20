@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "lib.kasuga.core.rendering.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "FirstPersonHandsMixin",
+    "FirstPersonRendererAccess",
+    "FirstPersonRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

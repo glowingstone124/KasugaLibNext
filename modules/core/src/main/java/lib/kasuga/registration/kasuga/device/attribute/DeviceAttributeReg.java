@@ -18,6 +18,11 @@ public class DeviceAttributeReg<T extends DeviceAttribute, U extends DeviceAttri
         this.factory = deviceTypeFactory;
     }
 
+    public static <T extends DeviceAttribute> DeviceAttributeReg<T, DeviceAttributeType<T>> of(
+            String name, BiFunction<CompoundTag, HolderLookup.Provider, T> factory) {
+        return new DeviceAttributeReg<>(name, factory);
+    }
+
     @Override
     protected U createObject(ResourceLocation id) {
         DeviceAttributeType.Builder<T> type = new DeviceAttributeType.Builder<>(this.factory);

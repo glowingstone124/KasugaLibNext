@@ -104,8 +104,18 @@ Open a standalone OBJ scene node with `KsgObjLoader.open`. It resolves sibling
 MTL files and diffuse textures from resource packs, including texture cutouts
 and MTL dissolve.
 
-Kasuga document and device registration, native model previews, world UI, and
-other custom rendering APIs are being ported.
+Document items register typed components with `DocumentComponentReg`. Their
+first-person renderers submit page geometry and text through
+`SubmitNodeCollector` in 26.3, using the same one- and two-handed page layouts
+as 1.21.1.
+
+`GlobalDeviceReg` and `DeviceAttributeReg` register global device types and
+attributes. On the first 26.3 load, the global device manager imports
+per-device files under the world's `devices/` directory into the overworld
+saved data `kasuga_lib:devices`. Records with no type ID are preserved, and
+the original files remain available.
+
+Native model previews, world UI, and other custom rendering APIs are being ported.
 Integration modules whose upstream mods still target earlier Minecraft releases
 stay in the 1.21.1 build.
 
@@ -119,8 +129,9 @@ world and framebuffer readback. The test selects and checks the requested backen
 Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_RENDERPEARL_PASS`, `KASUGA_WORLD_LIGHTS_PASS`,
 `KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`,
-`KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, and `KASUGA_OBJ_PASS`, then saves the
-model, animation, and lighting captures in the test game directory.
+`KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
+`KASUGA_DEVICE_PASS`, and `KASUGA_DOCUMENT_PASS`. Captures of the models,
+animation, lighting, and held documents are saved in the test game directory.
 
 Run the focused release gate with:
 

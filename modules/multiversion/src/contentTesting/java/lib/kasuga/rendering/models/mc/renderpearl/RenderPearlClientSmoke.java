@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.host.FsmClientSmoke;
+import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.host.ResourcePackSmoke;
 import lib.kasuga.host.RegistrationSmoke;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
@@ -53,6 +54,7 @@ public final class RenderPearlClientSmoke {
     private static boolean createdWorld;
     private static boolean cameraRequested;
     private static boolean capturing;
+    private static boolean modelsVerified;
     private static int frames;
     private static ModelInstance model;
     private static RenderPearlWorldModels.Mount mount;
@@ -102,7 +104,7 @@ public final class RenderPearlClientSmoke {
 
     @SubscribeEvent
     public static void beforeFrame(RenderFrameEvent.Pre event) throws IOException {
-        if (EXPECTED_BACKEND.isEmpty() || capturing) return;
+        if (EXPECTED_BACKEND.isEmpty() || capturing || modelsVerified) return;
         Minecraft client = Minecraft.getInstance();
         if (client.level == null || client.player == null || client.gui.screen() != null || client.gui.overlay() != null) return;
         if (!cameraRequested) {
@@ -169,6 +171,10 @@ public final class RenderPearlClientSmoke {
 
     @SubscribeEvent
     public static void afterFrame(RenderFrameEvent.Post event) {
+        if (modelsVerified) {
+            DocumentSmoke.afterFrame(Minecraft.getInstance());
+            return;
+        }
         if (!EXPECTED_BACKEND.isEmpty() && cameraRequested && mount == null) {
             FsmClientSmoke.afterFrame(Minecraft.getInstance());
         }
@@ -228,7 +234,8 @@ public final class RenderPearlClientSmoke {
                     scenes.close();
                     model.close();
                     client.getTextureManager().release(WHITE);
-                    client.stop();
+                    modelsVerified = true;
+                    DocumentSmoke.start(client);
                     return;
                 }
                 lighting = Lighting.values()[captured.ordinal() + 1];

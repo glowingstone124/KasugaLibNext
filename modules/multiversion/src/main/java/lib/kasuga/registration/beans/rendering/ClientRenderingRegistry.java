@@ -2,8 +2,11 @@ package lib.kasuga.registration.beans.rendering;
 
 import io.micronaut.context.annotation.Replaces;
 import jakarta.inject.Singleton;
+import lib.kasuga.content.document.DocumentComponentType;
+import lib.kasuga.content.document.DocumentItemRenderer;
 import lib.kasuga.inject.auto_configure.Configurable;
 import lib.kasuga.inject.class_loader.BeanOnlyIn;
+import lib.kasuga.registration.kasuga.document.DocumentComponentRendererSupplier;
 import lib.kasuga.registration.minecraft.block_entity.BlockEntityRendererBuilder;
 import lib.kasuga.registration.minecraft.entity.EntityRendererBuilder;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
@@ -46,5 +49,10 @@ public final class ClientRenderingRegistry implements RenderingRegistry, Configu
     @Override public <T extends Entity> void registerEntityRenderer(EntityType<T> type,
                                                                    Supplier<EntityRendererBuilder<T>> provider) {
         EntityRenderers.register(type, provider.get()::build);
+    }
+
+    @Override public <T> void registerDocumentComponentRenderer(DocumentComponentType<T> type,
+                                                                 Supplier<DocumentComponentRendererSupplier<T>> provider) {
+        DocumentItemRenderer.registerComponentRenderer(type, provider.get().get());
     }
 }

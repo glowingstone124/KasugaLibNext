@@ -2,6 +2,7 @@ package lib.kasuga.content.device;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -12,7 +13,7 @@ public class AttributeIndex {
     public void reindex(HashMap<UUID, GlobalDeviceSavedData> allData) {
         primaryIndex.clear();
         indexable.clear();
-        for (var entry : allData.entrySet()) {
+        for (Map.Entry<UUID, GlobalDeviceSavedData> entry : allData.entrySet()) {
             UUID deviceId = entry.getKey();
             GlobalDeviceSavedData data = entry.getValue();
             for (DeviceAttribute attribute : data.attributes) {
@@ -34,7 +35,7 @@ public class AttributeIndex {
     public void notifyAttributeRemoved(UUID deviceId, DeviceAttribute attribute) {
         DeviceAttributeType<?> type = attribute.getType();
         if(type.isUnique()) {
-            primaryIndex.remove(attribute);
+            primaryIndex.remove(attribute, deviceId);
         }
         if(type.canIndex()) {
             Set<UUID> ids = indexable.get(attribute);

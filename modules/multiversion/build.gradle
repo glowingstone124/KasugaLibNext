@@ -40,8 +40,15 @@ def prepareRegistrationSources = tasks.register('prepareRegistrationSources', Sy
     from(rootProject.file('modules/core/src/main/java')) {
         include 'lib/kasuga/KasugaLibRegistry.java',
                 'lib/kasuga/registration/**',
+                'lib/kasuga/content/device/**',
+                'lib/kasuga/content/document/**',
+                'lib/kasuga/core/codec/KasugaCodec.java',
+                'lib/kasuga/core/rendering/ISpecialRenderingItem.java',
                 'lib/kasuga/content/graph/GraphCycleDetector.java'
-        exclude 'lib/kasuga/registration/kasuga/**',
+        exclude 'lib/kasuga/content/device/GlobalDeviceManager.java',
+                'lib/kasuga/content/device/GlobalDeviceSavedData.java',
+                'lib/kasuga/content/document/DocumentComponentRenderer.java',
+                'lib/kasuga/content/document/DocumentItemRenderer.java',
                 'lib/kasuga/registration/beans/rendering/**',
                 'lib/kasuga/registration/core/DefaultClientRegisterContextDispatchers.java',
                 'lib/kasuga/registration/minecraft/common/DeferredFillHolder.java',

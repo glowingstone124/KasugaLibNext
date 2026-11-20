@@ -1,17 +1,8 @@
 package lib.kasuga.core.codec;
 
-import com.mojang.serialization.Codec;
 import io.netty.buffer.ByteBuf;
-import net.minecraft.core.Holder;
-import net.minecraft.core.Registry;
-import net.minecraft.core.RegistryCodecs;
-import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
-import net.neoforged.neoforge.common.util.NeoForgeExtraCodecs;
-import net.neoforged.neoforge.network.codec.NeoForgeStreamCodecs;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;

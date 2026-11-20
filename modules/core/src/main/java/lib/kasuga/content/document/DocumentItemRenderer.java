@@ -10,7 +10,6 @@ import net.minecraft.client.renderer.ItemInHandRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.player.PlayerRenderer;
 import net.minecraft.core.Holder;
-import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.item.ItemStack;
@@ -67,23 +66,9 @@ public class DocumentItemRenderer implements ISpecialItemRenderer {
         }
 
         poseStack.pushPose();
-        poseStack.translate(f * 0.51F, -0.08F + equippedProgress * -1.2F, -0.75F);
-        float f1 = Mth.sqrt(swingProgress);
-        float f2 = Mth.sin(f1 * 3.1415927F);
-        float f3 = -0.5F * f2;
-        float f4 = 0.4F * Mth.sin(f1 * 6.2831855F);
-        float f5 = -0.3F * Mth.sin(swingProgress * 3.1415927F);
-        poseStack.translate(f * f3, f4 - 0.3F * f2, f5);
-        poseStack.mulPose(Axis.XP.rotationDegrees(f2 * -45.0F));
-        poseStack.mulPose(Axis.YP.rotationDegrees(f * f2 * -30.0F));
+        DocumentLayout.oneHandPage(poseStack, f, equippedProgress, swingProgress);
         renderItem(stack, buffer, poseStack, packedLight);
         poseStack.popPose();
-    }
-
-    private static float calculateItemTilt(float pitch) {
-        float f = 1.0F - pitch / 45.0F + 0.1F;
-        f = Mth.clamp(f, 0.0F, 1.0F);
-        return -Mth.cos(f * 3.1415927F) * 0.5F + 0.5F;
     }
 
     public void renderItemInTwoHand(
@@ -97,13 +82,7 @@ public class DocumentItemRenderer implements ISpecialItemRenderer {
             ItemStack stack,
             float pitch
     ) {
-        float f = Mth.sqrt(swingProgress);
-        float f1 = -0.2F * Mth.sin(swingProgress * 3.1415927F);
-        float f2 = -0.4F * Mth.sin(f * 3.1415927F);
-        poseStack.translate(0.0F, -f1 / 2.0F, f2);
-        float f3 = calculateItemTilt(pitch);
-        poseStack.translate(0.0F, 0.04F + equippedProgress * -1.2F + f3 * -0.5F, -0.72F);
-        poseStack.mulPose(Axis.XP.rotationDegrees(f3 * -85.0F));
+        DocumentLayout.twoHandPose(poseStack, pitch, equippedProgress, swingProgress);
         if (!Minecraft.getInstance().player.isInvisible()) {
             poseStack.pushPose();
             poseStack.mulPose(Axis.YP.rotationDegrees(90.0F));
@@ -113,9 +92,7 @@ public class DocumentItemRenderer implements ISpecialItemRenderer {
             poseStack.popPose();
         }
 
-        float f4 = Mth.sin(f * 3.1415927F);
-        poseStack.mulPose(Axis.XP.rotationDegrees(f4 * 20.0F));
-        poseStack.scale(2.0F, 2.0F, 2.0F);
+        DocumentLayout.twoHandPage(poseStack, swingProgress);
         renderItem(stack, buffer, poseStack, packedLight);
     }
 
@@ -149,11 +126,7 @@ public class DocumentItemRenderer implements ISpecialItemRenderer {
         if(components == null)
             return;
 
-        poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
-        poseStack.mulPose(Axis.ZP.rotationDegrees(180.0F));
-        poseStack.scale(0.38F, 0.38F, 0.38F);
-        poseStack.translate(-0.5F, -0.5F, 0.0F);
-        poseStack.scale(0.0078125F, 0.0078125F, 0.0078125F);
+        DocumentLayout.pageCoordinates(poseStack);
 
         this.renderBackground(stack, bufferSource, poseStack, light);
 
