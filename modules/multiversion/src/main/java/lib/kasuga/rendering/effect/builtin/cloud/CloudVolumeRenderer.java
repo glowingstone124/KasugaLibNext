@@ -49,7 +49,7 @@ final class CloudVolumeRenderer implements EffectRenderer<CumulonimbusCloud>, Au
             "NoiseVolume", "ShapeVolume", "SceneDepth", "LightVolume");
     private static final RenderPipeline UPSAMPLE = pipeline("upsample", GpuFormat.RGBA8_UNORM, true, "CloudColor", "SceneDepth");
     private static final int MAX_LIGHT_CACHE = 8;
-    private final CloudVolumeAtlas atlas = new CloudVolumeAtlas();
+    private final CloudVolumeAtlas atlas;
     private final LinkedHashMap<LightKey, LightTarget> lights = new LinkedHashMap<>(8, .75f, true);
     private final Matrix4f viewProjection = new Matrix4f();
     private final Matrix4f inverseViewProjection = new Matrix4f();
@@ -63,6 +63,8 @@ final class CloudVolumeRenderer implements EffectRenderer<CumulonimbusCloud>, Au
     private final Vector3f up = new Vector3f();
     private TextureTarget reduced;
     private RenderTarget main;
+
+    CloudVolumeRenderer(CloudVolumeAtlas atlas) { this.atlas = atlas; }
 
     static void registerPipelines(RegisterRenderPipelinesEvent event) {
         event.registerPipeline(LIGHTING);
@@ -262,7 +264,6 @@ final class CloudVolumeRenderer implements EffectRenderer<CumulonimbusCloud>, Au
         reduced = null;
         for (LightTarget light : lights.values()) light.target.destroyBuffers();
         lights.clear();
-        atlas.close();
         main = null;
     }
 

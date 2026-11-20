@@ -31,7 +31,8 @@ dependencies {
 
 tasks.named('processResources', ProcessResources) {
     from(rootProject.file('modules/modelling/src/sharedResources')) {
-        include 'assets/kasuga_lib/shaders/include/cloud/density.glsl'
+        include 'assets/kasuga_lib/shaders/include/cloud/density.glsl',
+                'assets/kasuga_lib/shaders/include/cloud/sky_march.glsl'
     }
 }
 

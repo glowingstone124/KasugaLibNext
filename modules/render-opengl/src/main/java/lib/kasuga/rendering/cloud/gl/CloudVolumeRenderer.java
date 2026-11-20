@@ -122,7 +122,8 @@ public final class CloudVolumeRenderer implements AutoCloseable {
             march = new Program(resource("cumulonimbus.fsh").replace("// CLOUD_DENSITY", density));
             illuminate = new Program(resource("lighting.fsh").replace("// CLOUD_DENSITY", density));
             upsample = new Program(resource("upsample.fsh"));
-            sky = new Program(resource("sky.fsh"), true);
+            sky = new Program(resource("sky.fsh").replace("// CLOUD_SKY_SHARED",
+                    resource("/assets/kasuga_lib/shaders/include/cloud/sky_march.glsl")), true);
             skyComposite = new Program(resource("sky_composite.fsh"));
             historyResolve = new Program(resource("sky_history.fsh"), true);
             vao = GL30.glGenVertexArrays();
