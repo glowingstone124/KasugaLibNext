@@ -80,7 +80,6 @@ final class WorldLightRenderer implements AutoCloseable {
         GpuSampler nearest = RenderSystem.getSamplerCache().getClampToEdge(FilterMode.NEAREST);
         try {
             effect.draw(Minecraft.getInstance().gameRenderer.mainRenderTarget(), PIPELINE, (pass, color, depth) -> {
-                RenderSystem.bindDefaultUniforms(pass);
                 pass.setUniform("LightView", viewBuffer);
                 pass.setUniform("SceneSampler", color, nearest);
                 pass.setUniform("DepthSampler", depth, nearest);

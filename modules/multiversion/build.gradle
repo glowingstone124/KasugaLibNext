@@ -88,7 +88,16 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/be/**',
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/je/**',
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/CubeVerticesMapper.java',
-                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/MCMeshBuilder.java'
+                'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/MCMeshBuilder.java',
+                'lib/kasuga/rendering/effect/DuplicatePolicy.java',
+                'lib/kasuga/rendering/effect/RenderRegistration.java',
+                'lib/kasuga/rendering/effect/post/PostProcessTargetDescriptor.java',
+                'lib/kasuga/rendering/effect/post/graph/PostProcessGraph.java',
+                'lib/kasuga/rendering/effect/post/graph/PostProcessGraphFrame.java',
+                'lib/kasuga/rendering/effect/post/graph/PostProcessGraphPass.java',
+                'lib/kasuga/rendering/effect/post/graph/PostProcessGraphPassDescriptor.java',
+                'lib/kasuga/rendering/effect/post/graph/PostProcessGraphPrepare.java',
+                'lib/kasuga/rendering/effect/post/graph/PostProcessGraphTarget.java'
         exclude 'lib/kasuga/rendering/models/mc/dynamic/fsm/AnimationBlockEntity.java',
                 'lib/kasuga/rendering/models/mc/dynamic/fsm/KasugaModelPipelines.java',
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/loader/je/JETextureLayer.java'

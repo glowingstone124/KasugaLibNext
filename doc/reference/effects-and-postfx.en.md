@@ -325,6 +325,20 @@ Within a pass that declares a read, `fullscreen(...).colorSampler("NormalSampler
 
 See the [Nebula demo](../guides/nebula-demo.md) for a complete geometry/volume/presentation graph.
 
+## Minecraft 26.3 Post-Process Graphs
+
+26.3 shares graph declarations, dependency sorting, `prepare` callbacks, frame data, and target access validation.
+Register on the render thread with `PostProcessGraphRegistry.register(owner, priority, DuplicatePolicy.FAIL, graph)`.
+Graphs run in ascending priority and then ID order, after world rendering and before world UI compositing.
+A callback exception logs the graph and its owner and leaves the other graphs running. Closing a registration releases its targets. Unloading the world also clears the target pools.
+
+Register a RenderPearl `RenderPipeline` in `RegisterRenderPipelinesEvent` and put its GLSL in resource files.
+Call `context.fullscreen(output, pipeline, clear, bindings)` inside a graph pass.
+In the bindings callback, use `context.bindColor(pass, name, source, attachmentIndex)` and `context.bindDepth(pass, name, source)`.
+Color attachments support `RGBA8`, `RGBA16F`, and `RGBA32F` and must match the pipeline's attachment formats.
+`copyColor` supports scaling. `copyDepth` requires matching dimensions and depth formats.
+The preceding `BLIT_SCREEN`, `ShaderInstance`, and OpenGL TBO examples apply to 1.21.1.
+
 ## Ready-to-Run PostFX Presets
 
 `PostFxPresetDemo` uses one generated shader registration that stays active across reloads. Parameter blocks select different color settings. Preset selection does not register or compile the shader again.

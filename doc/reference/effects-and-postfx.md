@@ -325,6 +325,20 @@ PostProcessTargetDescriptor gbuffer = PostProcessTargetDescriptor.builder(scene.
 
 完整的三阶段几何/体积/呈现示例见 [Nebula demo](../guides/nebula-demo.md)。
 
+## Minecraft 26.3 后处理图
+
+26.3 复用同一套图声明、依赖排序、`prepare` 回调、帧数据和读写校验。使用
+`PostProcessGraphRegistry.register(owner, priority, DuplicatePolicy.FAIL, graph)` 在渲染线程注册。
+优先级数值较小的图先执行，同优先级按图 ID 排序。图在世界绘制之后、世界 UI 合成之前运行。
+图回调抛出的异常会记录图 ID 和所有者，其他图继续执行。关闭注册会释放该图的目标，卸载世界时也会清理目标池。
+
+在 `RegisterRenderPipelinesEvent` 注册 RenderPearl 的 `RenderPipeline`，并将 GLSL 放在资源包内。
+在 pass 中调用 `context.fullscreen(output, pipeline, clear, bindings)`。在绑定回调中使用
+`context.bindColor(pass, name, source, attachmentIndex)` 和 `context.bindDepth(pass, name, source)`。
+颜色支持 `RGBA8`、`RGBA16F` 和 `RGBA32F`，每张附件的格式须与管线匹配。
+`copyColor` 支持缩放，`copyDepth` 要求源和目标的尺寸、深度格式相同。
+上一节的 `BLIT_SCREEN`、`ShaderInstance` 和 OpenGL TBO 绑定示例适用于 1.21.1。
+
 ## 开箱即用的 PostFX 预设
 
 `PostFxPresetDemo` 只用一条生成的 shader 注册，且该注册跨重载保持有效。参数块选择不同的调色设置，切换预设不会重新注册或重新编译 shader。

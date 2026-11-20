@@ -10,8 +10,6 @@ import com.mojang.renderpearl.api.textures.GpuTexture;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 
 import java.util.Objects;
-import java.util.Optional;
-import java.util.OptionalDouble;
 
 /** Reuses a scene color copy for fullscreen passes that sample the destination's original color. */
 public final class WorldPostProcess implements AutoCloseable {
@@ -40,12 +38,8 @@ public final class WorldPostProcess implements AutoCloseable {
             snapshot = replacement;
         }
         snapshot.copyColorFrom(destination);
-        try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(
-                () -> label, destination.getColorTextureView(), Optional.empty(), null, OptionalDouble.empty())) {
-            pass.setPipeline(RenderSystem.getCompiledPipeline(pipeline));
-            inputs.bind(pass, snapshot.getColorTextureView(), depth);
-            pass.draw(3, 1, 0, 0);
-        }
+        PostProcessContext.fullscreen(destination, pipeline, false,
+                pass -> inputs.bind(pass, snapshot.getColorTextureView(), depth));
     }
 
     @Override public void close() {

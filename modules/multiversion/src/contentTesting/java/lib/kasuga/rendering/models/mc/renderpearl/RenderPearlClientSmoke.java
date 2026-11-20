@@ -12,6 +12,7 @@ import lib.kasuga.rendering.models.mc.backend.ui.WorldUiSmoke;
 import lib.kasuga.host.ResourcePackSmoke;
 import lib.kasuga.host.RegistrationSmoke;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
+import lib.kasuga.rendering.effect.post.graph.PostProcessGraphSmoke;
 import lib.kasuga.rendering.lighting.LightColor;
 import lib.kasuga.rendering.lighting.LightSource;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
@@ -188,6 +189,7 @@ public final class RenderPearlClientSmoke {
         if (modelsVerified) {
             Minecraft client = Minecraft.getInstance();
             if (MmdModelSmoke.needsFrames()) MmdModelSmoke.afterFrame(client);
+            else if (PostProcessGraphSmoke.needsFrames()) PostProcessGraphSmoke.afterFrame(client);
             else if (FrameOutputSmoke.started()) FrameOutputSmoke.afterFrame(client);
             else if (WorldUiSmoke.started()) WorldUiSmoke.afterFrame(client);
             else if (StructurePreviewSmoke.started()) StructurePreviewSmoke.afterFrame(client);

@@ -2,7 +2,6 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
-import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.models.mc.typo.KsgPmxLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelPosing;
 import lib.kasuga.rendering.models.uml.math.Transform;
@@ -59,7 +58,7 @@ final class MmdModelSmoke {
                 double center = sample(image);
                 client.execute(() -> {
                     try {
-                        evaluate(client, center);
+                        evaluate(center);
                     } catch (RuntimeException error) {
                         failure = error;
                     }
@@ -96,7 +95,7 @@ final class MmdModelSmoke {
         return (double) sumX / count;
     }
 
-    private static void evaluate(Minecraft client, double center) {
+    private static void evaluate(double center) {
         if (stage == 0) {
             restCenter = center;
             VpdPose poses = new VpdPose("smoke", Map.of("root", new Transform().translate(.32f, 0, 0)), Map.of());
@@ -112,7 +111,6 @@ final class MmdModelSmoke {
         if (++stage == 5) {
             finished = true;
             LogUtils.getLogger().info("KASUGA_MMD_PASS pmx,pmd,zip,entry-selection,tga,diffuse,cutout,vpd-skinning");
-            DocumentSmoke.start(client);
         }
         capturing = false;
     }
