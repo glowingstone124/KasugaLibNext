@@ -6,7 +6,31 @@
 设计、坐标变换和输入所有权见 [原理](../explanation/world-ui-input.md)。
 Create 结构上的附着面板见[移动结构上的场景与 UI](moving-scene-hosts.md)。
 
-## 接入现有 Screen
+## Minecraft 26.3
+
+`UIBackend.get()` 返回主视角的世界 UI 后端。面板可以是原版 `Screen`、有尺寸的原版控件，
+或者实现 `Renderable` 的组件。渲染入口使用 `GuiGraphicsExtractor`。
+
+```java
+UIBackend backend = UIBackend.get();
+Screen panel = new MyPanelScreen();
+panel.init(320, 180);
+backend.addRenderable(panel, new ScenePose(worldCenter,
+        new Matrix4f().rotate(panelRotation).scale(.006f, -.006f, 1).translate(-160, -90, 0)));
+```
+
+`worldCenter` 是面板中心的世界坐标，`panelRotation` 决定平面朝向。自定义组件可用
+`setBounds(panel, x, y, width, height)` 声明逻辑区域；实现 `GuiEventListener` 后可接收交互。
+移动面板使用 `addRenderable(panel, sceneHost, localToHost)`。宿主失效时后端移除面板并释放画布。
+
+Vulkan 和 OpenGL 均使用原版 GUI 画布，支持裁切、原版控件和嵌入式模型预览。画布以预乘 alpha
+合成到世界平面，遵循世界深度。准心和自由光标共用渲染时的投影；`openPointer()` 打开透明、
+非暂停的输入层。文本框支持键盘焦点、字符和 IME 预编辑，Escape 退出当前输入模式。
+调用 `removeRenderable(panel)` 移除静态面板，并由调用方关闭其内部持有的模型预览等资源。
+
+## Minecraft 1.21.1
+
+### 接入现有 Screen
 
 ```java
 Minecraft mc = Minecraft.getInstance();
@@ -132,13 +156,15 @@ Escape 后转动视角，确认准心交互仍可用；再次执行命令会重�
 窗口大小、GUI scale、FOV、第三人称和失焦切换需在真实客户端手动验收。
 JVM 测试覆盖投影数值和输入路由状态，不替代游戏内渲染及 GLFW 验证。
 
-已有隔离测试存档时，可自动检查真实键盘 Mixin、字符输入和极端 Z 的字体/控件像素：
+可在专用运行目录中自动检查真实键盘 Mixin、字符输入和极端 Z 的字体及控件像素。
 
 ```sh
 ./gradlew :modules:modelling:runClientHeadless --offline \
-  -PkasugaClientDirectory=run/world-ui-smoke -PkasugaQuickPlayWorld=TestWorld \
+  -PkasugaClientDirectory=run/world-ui-smoke \
   -PkasugaTestWorldUiInput=true
 ```
 
-`TestWorld` 需位于该运行目录的 `saves/` 下。测试不显示窗口，完成后退出；JSON 和 PNG 位于
-该运行目录的 `debug/world-ui-input/`。此自动化不覆盖系统输入法候选框和玩家操作手感。
+默认新建隔离测试世界。若要复用测试存档，将其放在运行目录的 `saves/` 下并添加
+`-PkasugaQuickPlayWorld=TestWorld`。隐藏客户端完成测试后退出。请核对日志中的
+`WORLD_UI_INPUT_SMOKE_PASS`，以及 `debug/world-ui-input/` 下的 JSON 和 PNG。
+系统输入法候选框和操作手感需要在可见客户端中确认。

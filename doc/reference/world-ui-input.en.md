@@ -5,7 +5,33 @@ For coordinate transforms and input ownership, see the [design](../explanation/w
 For Create attachments, see [Scenes and UI on moving structures](moving-scene-hosts.en.md).
 [中文](world-ui-input.md).
 
-## Integrating an Existing Screen
+## Minecraft 26.3
+
+`UIBackend.get()` provides world UI in the main view. A panel can be a vanilla `Screen`,
+a sized widget, or a `Renderable`. Rendering uses `GuiGraphicsExtractor`.
+
+```java
+UIBackend backend = UIBackend.get();
+Screen panel = new MyPanelScreen();
+panel.init(320, 180);
+backend.addRenderable(panel, new ScenePose(worldCenter,
+        new Matrix4f().rotate(panelRotation).scale(.006f, -.006f, 1).translate(-160, -90, 0)));
+```
+
+`worldCenter` locates the center and `panelRotation` orients the plane. Use
+`setBounds(panel, x, y, width, height)` with a custom renderable and implement
+`GuiEventListener` for input. The `addRenderable(panel, sceneHost, localToHost)` overload
+follows a scene host. On expiry the backend removes the panel and releases its canvas.
+
+Vulkan and OpenGL use native GUI canvases with clipping, widgets, and embedded model previews.
+The canvas composites with premultiplied alpha and world depth testing. Crosshair and free-cursor
+input use the render projection. `openPointer()` opens a transparent, non-pausing input layer.
+Text fields accept keyboard focus, characters, and IME preedit. Escape exits the current input mode.
+Use `removeRenderable(panel)` to remove a static panel. Its owner closes resources held by the panel.
+
+## Minecraft 1.21.1
+
+### Integrating an Existing Screen
 
 ```java
 Minecraft mc = Minecraft.getInstance();
@@ -142,14 +168,15 @@ Enter long ASCII and Chinese text to check clipping, then stop the demo and veri
 Window resizing, GUI scale, FOV, third-person views, and focus changes require real-client acceptance.
 JVM tests cover projection math and routing state; they do not replace in-game rendering or GLFW verification.
 
-With an existing isolated test world, run the real keyboard Mixin/character and GUI-depth pixel smoke:
+Run the real keyboard Mixin, character input, and GUI-depth pixel smoke in a dedicated game directory:
 
 ```sh
 ./gradlew :modules:modelling:runClientHeadless --offline \
-  -PkasugaClientDirectory=run/world-ui-smoke -PkasugaQuickPlayWorld=TestWorld \
+  -PkasugaClientDirectory=run/world-ui-smoke \
   -PkasugaTestWorldUiInput=true
 ```
 
-Place `TestWorld` under that run directory's `saves/`. The test uses a hidden window and exits on
-completion; JSON and PNG output is in `debug/world-ui-input/` under the run directory. It does not
-cover OS input-method candidate windows or the feel of player interaction.
+The test creates an isolated world by default. To reuse a test save, place it under the run directory's
+`saves/` and add `-PkasugaQuickPlayWorld=TestWorld`. The hidden client exits when the test completes.
+Look for `WORLD_UI_INPUT_SMOKE_PASS` and inspect the JSON and PNG output in `debug/world-ui-input/`.
+Use a visible client to check OS input-method candidate windows and the feel of player interaction.

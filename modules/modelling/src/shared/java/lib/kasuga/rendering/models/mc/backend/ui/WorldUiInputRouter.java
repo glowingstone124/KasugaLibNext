@@ -1,6 +1,6 @@
 package lib.kasuga.rendering.models.mc.backend.ui;
 
-import lib.kasuga.rendering.models.mc.util.RayTracingHelper;
+import lib.kasuga.rendering.models.mc.util.PlaneRayIntersection;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import org.jetbrains.annotations.Nullable;
@@ -40,9 +40,14 @@ public final class WorldUiInputRouter {
     }
 
     public void beginFrame(Matrix4fc projection, double width, double height, double mouseX, double mouseY) {
+        beginFrame(projection, width, height, mouseX, mouseY, -1, 0);
+    }
+
+    public void beginFrame(Matrix4fc projection, double width, double height, double mouseX, double mouseY,
+                           float nearDepth, float interiorDepth) {
         surfaces.clear();
         try {
-            this.projection = new ScreenPointerProjection(projection, width, height);
+            this.projection = new ScreenPointerProjection(projection, width, height, nearDepth, interiorDepth);
         } catch (IllegalArgumentException exception) {
             reset();
             throw exception;
@@ -120,11 +125,15 @@ public final class WorldUiInputRouter {
             float dx = position.x - capture.position.x;
             float dy = position.y - capture.position.y;
             capture.position.set(position);
-            if (dx != 0 || dy != 0) capture.listener.mouseDragged(position.x, position.y, entry.getKey(), dx, dy);
+            if (dx != 0 || dy != 0) WorldUiInputEvents.drag(capture.listener, position, entry.getKey(), capture.modifiers, dx, dy);
         }
     }
 
     public boolean press(double x, double y, int button) {
+        return press(x, y, button, 0, false);
+    }
+
+    public boolean press(double x, double y, int button, int modifiers, boolean doubleClick) {
         move(x, y);
         if (hovered == null) return false;
         GuiEventListener target = hovered;
@@ -133,22 +142,29 @@ public final class WorldUiInputRouter {
         setKeyboardFocus(target);
         if (keyboardFocus != target || !surfaces.containsKey(target)) return true;
         // Install ownership before invoking user code, so removal/closing from a callback can cancel it.
-        Capture capture = new Capture(target, position);
+        Capture capture = new Capture(target, position, modifiers);
         buttons.put(button, capture);
-        boolean accepted = target.mouseClicked(position.x, position.y, button);
+        boolean accepted = WorldUiInputEvents.press(target, position, button, modifiers, doubleClick);
         if (!accepted) buttons.remove(button, capture);
         return true;
     }
 
     public boolean release(double x, double y, int button) {
+        return release(x, y, button, 0);
+    }
+
+    public boolean release(double x, double y, int button, int modifiers) {
         move(x, y);
-        return releaseCapture(button);
+        Capture capture = buttons.remove(button);
+        if (capture == null) return false;
+        WorldUiInputEvents.release(capture.listener, capture.position, button, modifiers);
+        return true;
     }
 
     private boolean releaseCapture(int button) {
         Capture capture = buttons.remove(button);
         if (capture == null) return false;
-        capture.listener.mouseReleased(capture.position.x, capture.position.y, button);
+        WorldUiInputEvents.release(capture.listener, capture.position, button, capture.modifiers);
         return true;
     }
 
@@ -163,16 +179,16 @@ public final class WorldUiInputRouter {
         if (keyboardFocus == null) return false;
         GuiEventListener target = keyboardFocus;
         keys.putIfAbsent(new PhysicalKey(key, scanCode), new KeyCapture(target, scanCode, modifiers));
-        return target.keyPressed(key, scanCode, modifiers);
+        return WorldUiInputEvents.keyPressed(target, key, scanCode, modifiers);
     }
 
     public boolean keyReleased(int key, int scanCode, int modifiers) {
         KeyCapture capture = keys.remove(new PhysicalKey(key, scanCode));
-        return capture != null && capture.listener.keyReleased(key, scanCode, modifiers);
+        return capture != null && WorldUiInputEvents.keyReleased(capture.listener, key, scanCode, modifiers);
     }
 
-    public boolean charTyped(char character, int modifiers) {
-        return keyboardFocus != null && keyboardFocus.charTyped(character, modifiers);
+    public boolean charTyped(int codePoint, int modifiers) {
+        return keyboardFocus != null && WorldUiInputEvents.character(keyboardFocus, codePoint, modifiers);
     }
 
     private void setKeyboardFocus(@Nullable GuiEventListener target) {
@@ -181,7 +197,7 @@ public final class WorldUiInputRouter {
         keyboardFocus = target;
         for (var entry : Map.copyOf(keys).entrySet()) {
             KeyCapture capture = keys.remove(entry.getKey());
-            if (capture != null) capture.listener.keyReleased(entry.getKey().key, capture.scanCode, capture.modifiers);
+            if (capture != null) WorldUiInputEvents.keyReleased(capture.listener, entry.getKey().key, capture.scanCode, capture.modifiers);
         }
         if (previous != null) clearFocusChain(previous);
         if (target != null && keyboardFocus == target) target.setFocused(true);
@@ -249,7 +265,7 @@ public final class WorldUiInputRouter {
     private @Nullable Hit project(@Nullable Surface surface) {
         if (!validRay || surface == null) return null;
         Vector3f point = new Vector3f();
-        float distance = RayTracingHelper.intersectRayWithPlane(rayOrigin, rayDirection,
+        float distance = PlaneRayIntersection.intersect(rayOrigin, rayDirection,
                 surface.transform, surface.normal, point, true);
         if (distance < 0 || !Float.isFinite(distance)) return null;
         surface.inverse.transformPosition(point);
@@ -279,7 +295,7 @@ public final class WorldUiInputRouter {
     }
 
     private record Hit(Vector2f position, float distance) {}
-    private record Capture(GuiEventListener listener, Vector2f position) {}
+    private record Capture(GuiEventListener listener, Vector2f position, int modifiers) {}
     private record PhysicalKey(int key, int scanCode) {}
     private record KeyCapture(GuiEventListener listener, int scanCode, int modifiers) {}
 }

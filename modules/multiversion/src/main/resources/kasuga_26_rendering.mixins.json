@@ -5,7 +5,11 @@
   "client": [
     "FirstPersonHandsMixin",
     "FirstPersonRendererAccess",
-    "FirstPersonRendererMixin"
+    "FirstPersonRendererMixin",
+    "GuiCanvasMixin",
+    "WorldUiGameRendererMixin",
+    "WorldUiKeyboardMixin",
+    "WorldUiTextInputMixin"
   ],
   "injectors": {
     "defaultRequire": 1

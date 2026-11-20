@@ -251,7 +251,10 @@ neoForge {
                 systemProperty 'kasuga.testFrameOutput', frameOutputSmoke.get()
             }
             def worldUiInputSmoke = providers.gradleProperty('kasugaTestWorldUiInput')
-            if (worldUiInputSmoke.isPresent()) systemProperty 'kasuga.testWorldUiInput', worldUiInputSmoke.get()
+            if (worldUiInputSmoke.isPresent()) {
+                systemProperty 'kasuga.testWorldUiInput', worldUiInputSmoke.get()
+                systemProperty 'kasuga.testWorldUiInput.createWorld', Boolean.toString(!providers.gradleProperty('kasugaQuickPlayWorld').isPresent())
+            }
             def minecraftPreviewSmoke = providers.gradleProperty('kasugaTestMinecraftPreview')
             if (minecraftPreviewSmoke.isPresent()) systemProperty 'kasuga.testMinecraftPreview', minecraftPreviewSmoke.get()
             def worldDisplaySmoke = providers.gradleProperty('kasugaTestWorldDisplay')

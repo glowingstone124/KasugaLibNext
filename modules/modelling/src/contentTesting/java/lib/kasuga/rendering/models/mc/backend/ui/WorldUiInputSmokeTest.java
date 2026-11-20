@@ -14,9 +14,17 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import org.joml.Matrix4f;
@@ -30,17 +38,31 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 
-/** Opt-in hidden real-client regression; requires an isolated quick-play world. */
+/** Opt-in hidden real-client regression with an isolated world. */
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
 public final class WorldUiInputSmokeTest {
     private static final boolean ENABLED = Boolean.getBoolean("kasuga.testWorldUiInput");
+    private static final boolean CREATE_WORLD = Boolean.getBoolean("kasuga.testWorldUiInput.createWorld");
     private static final long START = System.nanoTime();
     private static final LinkedHashMap<String, Object> REPORT = new LinkedHashMap<>();
     private static Panel panel;
     private static int warmup, stage;
     private static byte[] baseline;
     private static boolean finished;
+    private static boolean worldRequested;
     private WorldUiInputSmokeTest() {}
+
+    @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
+        if (!ENABLED || !CREATE_WORLD || worldRequested || finished) return;
+        Minecraft client = Minecraft.getInstance();
+        if (client.level != null || client.getOverlay() != null || client.screen == null) return;
+        worldRequested = true;
+        String world = "world-ui-smoke-" + Long.toString(System.currentTimeMillis(), 36);
+        LevelSettings settings = new LevelSettings(world, GameType.CREATIVE, false, Difficulty.PEACEFUL,
+                true, new GameRules(), WorldDataConfiguration.DEFAULT);
+        client.createWorldOpenFlows().createFreshLevel(world, settings, new WorldOptions(26003L, true, false),
+                WorldPresets::createNormalWorldDimensions, client.screen);
+    }
 
     @SubscribeEvent public static void before(RenderFrameEvent.Pre event) {
         if (!ENABLED || finished) return;

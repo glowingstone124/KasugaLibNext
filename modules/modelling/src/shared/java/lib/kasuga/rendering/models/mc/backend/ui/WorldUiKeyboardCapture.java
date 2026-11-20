@@ -5,7 +5,6 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.components.events.ContainerEventHandler;
 import net.minecraft.client.gui.components.events.GuiEventListener;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,23 +36,23 @@ final class WorldUiKeyboardCapture {
 
     boolean key(int key, int scanCode, int action, int modifiers, boolean allowed) {
         PhysicalKey physical = new PhysicalKey(key, scanCode);
-        if (action == GLFW.GLFW_RELEASE) held.remove(physical);
-        else if (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) held.add(physical);
+        if (action == WorldUiInputEvents.RELEASE) held.remove(physical);
+        else if (action == WorldUiInputEvents.PRESS || action == WorldUiInputEvents.REPEAT) held.add(physical);
         refresh(allowed);
-        if (action == GLFW.GLFW_RELEASE) {
+        if (action == WorldUiInputEvents.RELEASE) {
             boolean owned = swallowed.remove(physical);
             if (active) router.keyReleased(key, scanCode, modifiers);
             return owned || active;
         }
         if (!active) {
             // Old held keys must not resume gameplay through GLFW_REPEAT after Escape.
-            if (action == GLFW.GLFW_REPEAT && swallowed.contains(physical)) return true;
-            if (action == GLFW.GLFW_PRESS) swallowed.remove(physical); // Fresh down after focus loss.
+            if (action == WorldUiInputEvents.REPEAT && swallowed.contains(physical)) return true;
+            if (action == WorldUiInputEvents.PRESS) swallowed.remove(physical); // Fresh down after focus loss.
             return false;
         }
-        if (action == GLFW.GLFW_PRESS || action == GLFW.GLFW_REPEAT) {
+        if (action == WorldUiInputEvents.PRESS || action == WorldUiInputEvents.REPEAT) {
             swallowed.add(physical);
-            if (key == GLFW.GLFW_KEY_ESCAPE) cancel();
+            if (WorldUiInputEvents.isEscape(key, scanCode, modifiers)) cancel();
             else {
                 router.keyPressed(key, scanCode, modifiers);
                 refresh(allowed); // Tab or custom callbacks can move focus away from text.
@@ -66,7 +65,7 @@ final class WorldUiKeyboardCapture {
     boolean character(int codePoint, int modifiers, boolean allowed) {
         if (!refresh(allowed)) return false;
         if (Character.isValidCodePoint(codePoint)) {
-            for (char character : Character.toChars(codePoint)) router.charTyped(character, modifiers);
+            router.charTyped(codePoint, modifiers);
         }
         return true;
     }

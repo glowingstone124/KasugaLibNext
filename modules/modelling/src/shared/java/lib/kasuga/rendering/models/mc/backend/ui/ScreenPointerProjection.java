@@ -12,8 +12,15 @@ public final class ScreenPointerProjection {
     private final Matrix4f projection;
     private final double width;
     private final double height;
+    private final float nearDepth;
+    private final float interiorDepth;
 
     public ScreenPointerProjection(Matrix4fc projection, double width, double height) {
+        this(projection, width, height, -1, 0);
+    }
+
+    public ScreenPointerProjection(Matrix4fc projection, double width, double height,
+                                   float nearDepth, float interiorDepth) {
         if (!(width > 0) || !(height > 0) || !Double.isFinite(width) || !Double.isFinite(height)
                 || !projection.isFinite() || projection.determinant() == 0) {
             throw new IllegalArgumentException("A finite, invertible projection and positive viewport are required");
@@ -23,6 +30,8 @@ public final class ScreenPointerProjection {
         if (!inverseProjection.isFinite()) throw new IllegalArgumentException("Projection inverse is not finite");
         this.width = width;
         this.height = height;
+        this.nearDepth = nearDepth;
+        this.interiorDepth = interiorDepth;
     }
 
     /** Projects a view-local point through the same render-time matrix used by pointer rays. */
@@ -41,9 +50,9 @@ public final class ScreenPointerProjection {
         if (!Double.isFinite(mouseX) || !Double.isFinite(mouseY)) return false;
         float x = (float) (2 * mouseX / width - 1);
         float y = (float) (1 - 2 * mouseY / height);
-        inverseProjection.transformProject(origin.set(x, y, -1));
+        inverseProjection.transformProject(origin.set(x, y, nearDepth));
         // An interior depth avoids the infinite far plane used by some projections.
-        inverseProjection.transformProject(direction.set(x, y, 0));
+        inverseProjection.transformProject(direction.set(x, y, interiorDepth));
         direction.sub(origin);
         if (!origin.isFinite() || !direction.isFinite() || direction.lengthSquared() < 1e-12f) return false;
         direction.normalize();

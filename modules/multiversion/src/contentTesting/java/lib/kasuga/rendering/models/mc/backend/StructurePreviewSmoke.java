@@ -1,5 +1,6 @@
 package lib.kasuga.rendering.models.mc.backend;
 
+import lib.kasuga.rendering.models.mc.backend.ui.WorldUiSmoke;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.rendering.models.mc.backend.ui.ModelPreviewWidget;
@@ -172,7 +173,7 @@ public final class StructurePreviewSmoke {
                 finished = true;
                 LOGGER.info("KASUGA_STRUCTURE_PREVIEW_PASS world,gui,vanilla-nbt,litematic,sponge,fluid,layers,cache,reload,pick,closed");
                 LOGGER.info("KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS chest,sign-text,private-level,layer-visibility,detached");
-                client.stop();
+                WorldUiSmoke.start(client);
             }
         }
         capturing = false;
