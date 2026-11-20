@@ -85,6 +85,9 @@ to create a registry on the mod event bus. Minecraft-facing methods use
 registry key. The same data-driven manifests serve both Minecraft versions.
 Registration reads `on_register` from the owning mod, and resource reload reads
 `on_reload` from the active pack stack.
+The generated `Rpc.wrap` API uses the corresponding NeoForge client and server
+packet distributors on both Minecraft targets. One-way calls and calls with a
+response share the existing RPC codecs and session handling.
 
 Model rendering uses Minecraft entity pipelines on the active graphics backend
 and supports CPU skinning. Point, area, and volumetric lights use RenderPearl
@@ -130,7 +133,7 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_RENDERPEARL_PASS`, `KASUGA_WORLD_LIGHTS_PASS`,
 `KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`,
 `KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
-`KASUGA_DEVICE_PASS`, and `KASUGA_DOCUMENT_PASS`. Captures of the models,
+`KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, and `KASUGA_RPC_PASS`. Captures of the models,
 animation, lighting, and held documents are saved in the test game directory.
 
 Run the focused release gate with:

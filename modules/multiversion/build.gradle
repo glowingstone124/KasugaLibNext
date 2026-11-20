@@ -43,12 +43,14 @@ def prepareRegistrationSources = tasks.register('prepareRegistrationSources', Sy
                 'lib/kasuga/content/device/**',
                 'lib/kasuga/content/document/**',
                 'lib/kasuga/core/codec/KasugaCodec.java',
+                'lib/kasuga/core/networking/rpc/**',
                 'lib/kasuga/core/rendering/ISpecialRenderingItem.java',
                 'lib/kasuga/content/graph/GraphCycleDetector.java'
         exclude 'lib/kasuga/content/device/GlobalDeviceManager.java',
                 'lib/kasuga/content/device/GlobalDeviceSavedData.java',
                 'lib/kasuga/content/document/DocumentComponentRenderer.java',
                 'lib/kasuga/content/document/DocumentItemRenderer.java',
+                'lib/kasuga/core/networking/rpc/RpcTransport.java',
                 'lib/kasuga/registration/beans/rendering/**',
                 'lib/kasuga/registration/core/DefaultClientRegisterContextDispatchers.java',
                 'lib/kasuga/registration/minecraft/common/DeferredFillHolder.java',
@@ -67,7 +69,8 @@ def prepareRegistrationSources = tasks.register('prepareRegistrationSources', Sy
 }
 def prepareRegistrationTemplates = tasks.register('prepareRegistrationTemplates', Sync) {
     from(rootProject.file('modules/core/src/codeTemplate/java')) {
-        include 'template/lib/kasuga/registration/minecraft/**'
+        include 'template/lib/kasuga/registration/minecraft/**',
+                'template/lib/kasuga/core/networking/rpc/**'
     }
     filter(updateMinecraftNames)
     into(templateDirectory)

@@ -14,6 +14,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.apache.commons.lang3.NotImplementedException;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 public abstract class RpcApi<T extends CustomPacketPayload, S extends RpcApi<T, S>> {
     PayloadReg<T> requestRegistration;
@@ -46,7 +47,7 @@ public abstract class RpcApi<T extends CustomPacketPayload, S extends RpcApi<T, 
             if(!executableOnServer) {
                 throw new IllegalStateException("This RPC is not executable on server!");
             }
-            PacketDistributor.sendToServer(request);
+            RpcTransport.sendToServer(request);
         }
     }
 
@@ -162,7 +163,12 @@ public abstract class RpcApi<T extends CustomPacketPayload, S extends RpcApi<T, 
 
         public CompletableFuture<R> run(T request, Player player) {
             RpcSessionManager.Session<R> session = sessionManager.assign(timeout.toMillis(), player);
-            super.call(session.wrap(requestSerializer, request), player);
+            try {
+                super.call(session.wrap(requestSerializer, request), player);
+            } catch (RuntimeException failure) {
+                sessionManager.reject(session.id(), failure, player);
+                throw failure;
+            }
             return session.future();
         }
 
@@ -204,13 +210,20 @@ public abstract class RpcApi<T extends CustomPacketPayload, S extends RpcApi<T, 
 
         @Override
         public void handle(IdentifiedRpcPacketType<T>.Packet request, IPayloadContext context) {
-            CompletableFuture<R> future = handle(request.getValue(), context);
+            CompletableFuture<R> future;
+            try {
+                future = Objects.requireNonNull(handle(request.getValue(), context), "RPC response future");
+            } catch (RuntimeException failure) {
+                future = CompletableFuture.failedFuture(failure);
+            }
             future.whenComplete((result, exception) -> {
                 // Both the success and the error reply hop to the main thread — replying from the
                 // network thread would race the client's session bookkeeping.
                 context.enqueueWork(() -> {
                     if (exception != null) {
-                        context.reply(errorSerializer.wrap(request.getId(), new Error(exception.getMessage())));
+                        String message = exception.getMessage();
+                        if (message == null) message = exception.getClass().getSimpleName();
+                        context.reply(errorSerializer.wrap(request.getId(), new Error(message)));
                         return;
                     }
                     context.reply(responseSerializer.wrap(request.getId(), result));

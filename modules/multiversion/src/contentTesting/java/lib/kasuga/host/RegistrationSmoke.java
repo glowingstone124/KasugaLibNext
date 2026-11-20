@@ -181,6 +181,7 @@ public final class RegistrationSmoke {
         StringStateProperty mode = (StringStateProperty) state.getBlock().getStateDefinition().getProperty("mode");
         if (!state.getValue(BlockStateProperties.OPEN) || !state.getValue(mode).equals("paused")
                 || smoke.reply != 63 || !smoke.reloaded) return false;
+        if (!RpcSmoke.ready(client)) return false;
         if (!smoke.blockRendererBuilt || !smoke.entityRendererBuilt) {
             throw new IllegalStateException("Registry renderer stages did not create the registered renderers");
         }

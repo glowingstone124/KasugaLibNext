@@ -193,6 +193,14 @@ class WithResponseFlowTest {
     }
 
     @Test
+    void rejectedDispatchRemovesPendingSession() {
+        EchoRpc rpc = new EchoRpc("echo", request -> request.value());
+        assertThrows(IllegalStateException.class, () -> rpc.run(new EchoRpc.Request(10)));
+        assertTrue(rpc.sessionManager.sessionMap.isEmpty());
+        assertTrue(rpc.sessionManager.sessions.isEmpty());
+    }
+
+    @Test
     void tickTimesOutExpiredSessions() {
         EchoRpc rpc = new EchoRpc("echo", request -> request.value());
         RpcSessionManager.Session<Integer> session = rpc.sessionManager.assign(-1, null);
