@@ -1,10 +1,11 @@
 package lib.kasuga.rendering.models.mc.typo.pmx_entry;
 
-import lib.kasuga.rendering.models.mc.util.ModelJson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonDeserializer;
 import com.google.gson.annotations.JsonAdapter;
 import com.google.gson.JsonObject;
+import lib.kasuga.rendering.models.mc.util.ModelJson;
+import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.MmdMeshLoader;
 import lombok.Getter;
 import org.joml.Vector3f;
 
@@ -12,7 +13,7 @@ import java.nio.charset.Charset;
 
 public class ZipMeta {
 
-    public static final float DEFAULT_MODEL_SCALE = 1.0f / 12.0f;
+    public static final float DEFAULT_MODEL_SCALE = MmdMeshLoader.DEFAULT_MODEL_SCALE;
 
     @Getter
     private Charset charset;

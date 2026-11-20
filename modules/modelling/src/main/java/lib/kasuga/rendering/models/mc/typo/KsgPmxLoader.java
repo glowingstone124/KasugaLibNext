@@ -13,32 +13,19 @@ import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCTextureData;
 import lib.kasuga.rendering.models.mc.source.texture.CombinedTextureManager;
 import lib.kasuga.rendering.models.mc.source.texture.bake.PbrBakeProfile;
 import lib.kasuga.rendering.models.mc.typo.pmx_entry.KsgPmxContext;
+import lib.kasuga.rendering.models.mc.typo.pmx_entry.MmdTextureImages;
 import lib.kasuga.rendering.models.mc.typo.pmx_entry.ZipHelper;
 import lib.kasuga.rendering.models.mc.typo.pmx_entry.ZipResource;
 import lib.kasuga.rendering.models.mc.typo.pmx_entry.ZipMeta;
 import lib.kasuga.rendering.models.uml.loaders.MaterialSetBuilder;
 import lib.kasuga.rendering.models.uml.loaders.SpriteSetBuilder;
-import lib.kasuga.rendering.models.uml.loaders.serial.ContextData;
 import lib.kasuga.rendering.models.uml.loaders.serial.SerialContext;
 import lib.kasuga.rendering.models.uml.loaders.serial.byte_stream.StreamLoader;
-import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.structure.Model;
-import lib.kasuga.rendering.models.uml.structure.basic.Mesh;
-import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
-import lib.kasuga.rendering.models.uml.structure.data.ModelData;
-import lib.kasuga.rendering.models.uml.structure.material.Material;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
-import lib.kasuga.rendering.models.uml.structure.skeleton.Bone;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.PMXLoader;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.bone.PmxBone;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.MmdModelData;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.PmxTail;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.bone.PmxBoneBinding;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.header.PmxHeader;
+import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.MmdMeshLoader;
 import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.material.PmxMaterial;
 import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.material.PmxMaterialData;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.mesh.PmxMesh;
-import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.data.vertex.PmxVertex;
 import lib.kasuga.rendering.models.uml.typo.miku_miku_dance.pmd.PmdToPmxConverter;
 import lib.kasuga.structure.Pair;
 import net.minecraft.client.renderer.texture.MissingTextureAtlasSprite;
@@ -46,23 +33,16 @@ import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
-import org.lwjgl.stb.STBImage;
-import org.lwjgl.system.MemoryUtil;
 import org.slf4j.Logger;
 
-import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.awt.image.DataBufferByte;
-import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.IntBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.List;
 
-public class KsgPmxLoader extends PMXLoader<ZipHelper, ResourceLocation, ZipResource, KsgPmxContext> {
+public class KsgPmxLoader extends MmdMeshLoader<ZipHelper, ResourceLocation, ZipResource, KsgPmxContext> {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -219,52 +199,7 @@ public class KsgPmxLoader extends PMXLoader<ZipHelper, ResourceLocation, ZipReso
                 loadedTextures.add(Pair.of(s, texture));
                 return texture;
             }
-            ByteArrayInputStream bis = new ByteArrayInputStream(copyBytes(s.buffer()));
-            BufferedImage image = ImageIO.read(bis);
-            bis.close();
-            if (image == null) {
-                if (!s.name().toLowerCase(Locale.ROOT).endsWith(".tga")) {
-                    throw new RuntimeException("Unsupported image format: " + s.name());
-                }
-                ByteBuffer bb = null;
-                ByteBuffer copied = MemoryUtil.memAlloc(s.buffer().remaining());
-                copied.order(ByteOrder.nativeOrder());
-                copied.put(s.buffer().duplicate());
-                copied.flip();
-
-                IntBuffer w = MemoryUtil.memAllocInt(1);
-                IntBuffer h = MemoryUtil.memAllocInt(1);
-                IntBuffer comp = MemoryUtil.memAllocInt(1);
-
-                try {
-                    bb = STBImage.stbi_load_from_memory(copied, w, h, comp, 4);
-                    if (bb == null) {
-                        throw new RuntimeException("Failed to load TGA image: " + STBImage.stbi_failure_reason());
-                    }
-                    image = new BufferedImage(w.get(0), h.get(0), BufferedImage.TYPE_4BYTE_ABGR);
-                    byte[] imageData = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-                    for (int i = 0; i < bb.remaining(); i += 4) {
-                        // STBImage loads in RGBA, but BufferedImage expects ABGR, so we need to swap the R and B channels
-                        byte r = bb.get(i);
-                        byte g = bb.get(i + 1);
-                        byte b = bb.get(i + 2);
-                        byte a = bb.get(i + 3);
-
-                        imageData[i] = a;
-                        imageData[i + 1] = b;
-                        imageData[i + 2] = g;
-                        imageData[i + 3] = r;
-                    }
-                } finally {
-                    MemoryUtil.memFree(copied);
-                    MemoryUtil.memFree(w);
-                    MemoryUtil.memFree(h);
-                    MemoryUtil.memFree(comp);
-                    if (bb != null) {
-                        STBImage.stbi_image_free(bb);
-                    }
-                }
-            }
+            BufferedImage image = MmdTextureImages.decode(s.name(), copyBytes(s.buffer()));
             if (image.getType() != BufferedImage.TYPE_4BYTE_ABGR) {
                 BufferedImage converted = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
                 Graphics2D g = converted.createGraphics();
@@ -301,53 +236,7 @@ public class KsgPmxLoader extends PMXLoader<ZipHelper, ResourceLocation, ZipReso
     }
 
     @Override
-    public Vertex getVertex(PmxVertex first, Collection<PmxVertex> vertex) {
-        if (vertex.isEmpty() || first == null) {
-            throw new IllegalArgumentException("Vertex collection cannot be empty");
-        }
-        if (first.binding.type == PmxBoneBinding.BindingType.SDEF && first.binding.data != null) {
-            first.binding.data.c().mul(activeModelScale());
-            first.binding.data.r0().mul(activeModelScale());
-            first.binding.data.r1().mul(activeModelScale());
-        }
-        Vector3f position = new Vector3f(first.position).mul(activeModelScale());
-        return new Vertex(position, first);
-    }
-
-    @Override
-    public Mesh getMesh(Vertex v1, Vertex v2, Vertex v3, PmxMesh mesh) {
-        return new Mesh(new Vertex[]{v1, v2, v3}, new Vector3f(), new Transform(), new Material[1], mesh);
-    }
-
-    @Override
-    public Bone getBone(List<PmxBone> bones, PmxBone bone) {
-        return new Bone(bone.localBoneName, super.calculateBoneTransform(bones, bone), bone);
-    }
-
-    @Override
-    public void scaleBone(PmxBone bone) {
-        bone.position.mul(activeModelScale());
-        if (bone.tailObject instanceof Vector3f v) {
-            v.mul(activeModelScale());
-        }
-    }
-
-    @Override
-    protected Vector3f scaleMmdTranslation(Vector3f value) {
-        return value.mul(activeModelScale());
-    }
-
-    @Override
-    public @Nullable ModelData getModelData(PmxHeader header) {
-        return header;
-    }
-
-    @Override
-    public @Nullable ModelData getModelData(PmxHeader header, PmxTail tail) {
-        return new MmdModelData(header, tail, activeModelScale(), getBones().size());
-    }
-
-    private Vector3f activeModelScale() {
+    protected Vector3f modelScale() {
         return loadingFile == null
                 ? new Vector3f(ZipMeta.DEFAULT_MODEL_SCALE)
                 : loadingFile.getModelScale();

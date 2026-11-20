@@ -108,7 +108,8 @@ Open a standalone OBJ scene node with `KsgObjLoader.open`. It resolves sibling
 MTL files and diffuse textures from resource packs, including texture cutouts
 and MTL dissolve.
 Use `RenderPearlModelSource.open` for a standalone scene node backed by any of
-these resource formats. Java block models resolve parent files and per-face
+these resource formats, including PMX, PMD, and MMD ZIP archives with diffuse textures.
+`KsgPmxLoader.openArchive` accepts an explicit model entry. Java block models resolve parent files and per-face
 texture aliases. Bedrock uses its first geometry by default.
 `KsgMinecraftJsonLoader.openBedrock` also accepts a geometry name and a texture
 override for files shared by multiple entities.
@@ -151,7 +152,7 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_SCENE_LIGHTS_PASS`, `KASUGA_BLOCKBENCH_LIGHT_PASS`,
 `KASUGA_REGISTRATION_PASS`, `KASUGA_FSM_PASS`, `KASUGA_OBJ_PASS`,
 `KASUGA_DEVICE_PASS`, `KASUGA_DOCUMENT_PASS`, `KASUGA_RPC_PASS`,
-`KASUGA_NATIVE_JSON_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
+`KASUGA_NATIVE_JSON_PASS`, `KASUGA_MMD_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
 `KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_UI_PASS`, and `KASUGA_FRAME_OUTPUT_PASS`.
 Captures of the models, animation, lighting, held documents, and GUI previews
 are saved in the test game directory.

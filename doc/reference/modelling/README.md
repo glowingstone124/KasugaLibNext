@@ -7,6 +7,15 @@
 
 本文说明模组随资源包发布模型时的标准接入流程，以及开发该模块时应使用的验证与调试方法。实现仅限客户端使用，不能从专用服务端访问渲染 API。
 
+## Minecraft 26.3 的 MMD 模型
+
+用 `RenderPearlModelSource.open(Identifier)` 加载 `.pmx`、`.pmd` 或 `.mmd.zip`。独立模型的漫反射纹理路径相对于
+模型资源。压缩包默认按规范化路径排序并选择第一个模型。可用 `KsgPmxLoader.openArchive(archiveId, entryName)`
+指定包内模型。压缩包旁的 `.mmd.json` 支持 `encoding` 和 `model_scale`。
+
+Vulkan 和 OpenGL 共用 RenderPearl 渲染器以及库内骨骼、变形和姿势管线。当前适配器支持漫反射纹理与材质 Alpha。
+Toon、球面贴图和 PBR 纹理处理仍待移植。以下章节介绍 1.21.1。
+
 ## 前置条件
 
 - Java 21。模块的 Gradle toolchain 固定为 Java 21。

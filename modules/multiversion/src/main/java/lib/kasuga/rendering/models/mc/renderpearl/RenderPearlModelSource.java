@@ -9,6 +9,7 @@ import lib.kasuga.rendering.models.mc.scene.ModelBounds;
 import lib.kasuga.rendering.models.mc.scene.display.WorldDisplayTarget;
 import lib.kasuga.rendering.models.mc.typo.KsgMinecraftJsonLoader;
 import lib.kasuga.rendering.models.mc.typo.KsgObjLoader;
+import lib.kasuga.rendering.models.mc.typo.KsgPmxLoader;
 import lib.kasuga.rendering.models.mc.typo.bbmodel.KsgBbModelLoader;
 import lib.kasuga.rendering.models.mc.typo.gltf.KsgGltfLoader;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
@@ -75,6 +76,7 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
         String path = identifier.getPath();
         if (path.endsWith(".bbmodel")) return KsgBbModelLoader.open(identifier);
         if (path.endsWith(".gltf") || path.endsWith(".glb")) return KsgGltfLoader.open(identifier);
+        if (path.endsWith(".pmx") || path.endsWith(".pmd") || path.endsWith(".zip")) return KsgPmxLoader.open(identifier);
         if (path.endsWith(".obj")) return KsgObjLoader.open(identifier);
         if (path.endsWith(".geo.json")) return KsgMinecraftJsonLoader.openBedrock(identifier);
         if (path.endsWith(".json")) return KsgMinecraftJsonLoader.openJava(identifier);

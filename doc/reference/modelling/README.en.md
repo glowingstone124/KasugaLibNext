@@ -8,6 +8,17 @@ For block entities that drive models through Proxy Sessions, start with
 
 This document describes the standard integration path for a mod that ships models with its resource pack, plus the validation and debugging methods to use while developing the module itself. The implementation is client-only: do not access its rendering APIs from a dedicated server.
 
+## Minecraft 26.3 MMD models
+
+Open standalone `.pmx` or `.pmd` resources with `RenderPearlModelSource.open(Identifier)`. Diffuse
+texture paths are relative to the model resource. For `.mmd.zip` archives, the same API opens the
+first model in normalized path order. Use `KsgPmxLoader.openArchive(archiveId, entryName)` to select
+an entry. The adjacent `.mmd.json` accepts `encoding` and `model_scale`.
+
+Vulkan and OpenGL share the RenderPearl renderer and the library's skeleton, morph, and pose
+pipeline. This adapter currently renders diffuse textures and material alpha. The legacy toon,
+sphere-map, and PBR texture treatments are pending. The following sections describe 1.21.1.
+
 ## Prerequisites
 
 - Java 21. The module's Gradle toolchain is pinned to Java 21.

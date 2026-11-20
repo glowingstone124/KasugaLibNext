@@ -17,9 +17,9 @@ import lib.kasuga.rendering.lighting.LightSource;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfLoader;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfModelConverter;
+import lib.kasuga.rendering.output.mc.FrameOutputSmoke;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
-import lib.kasuga.rendering.output.mc.FrameOutputSmoke;
 import net.minecraft.client.Screenshot;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.server.IntegratedServer;
@@ -187,7 +187,8 @@ public final class RenderPearlClientSmoke {
     public static void afterFrame(RenderFrameEvent.Post event) throws Exception {
         if (modelsVerified) {
             Minecraft client = Minecraft.getInstance();
-            if (FrameOutputSmoke.started()) FrameOutputSmoke.afterFrame(client);
+            if (MmdModelSmoke.needsFrames()) MmdModelSmoke.afterFrame(client);
+            else if (FrameOutputSmoke.started()) FrameOutputSmoke.afterFrame(client);
             else if (WorldUiSmoke.started()) WorldUiSmoke.afterFrame(client);
             else if (StructurePreviewSmoke.started()) StructurePreviewSmoke.afterFrame(client);
             else if (GuiPreviewSmoke.started()) GuiPreviewSmoke.afterFrame(client);
@@ -268,7 +269,6 @@ public final class RenderPearlClientSmoke {
                     model.close();
                     client.getTextureManager().release(WHITE);
                     modelsVerified = true;
-                    DocumentSmoke.start(client);
                     return;
                 }
                 lighting = Lighting.values()[captured.ordinal() + 1];

@@ -79,6 +79,9 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
     from(rootProject.file('modules/modelling/src/main/java')) {
         include 'lib/kasuga/rendering/models/mc/dynamic/fsm/**',
                 'lib/kasuga/rendering/models/mc/scene/BlueprintImporters.java',
+                'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipHelper.java',
+                'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipResource.java',
+                'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipMeta.java',
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/data/be/**',
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/data/je/**',
                 'lib/kasuga/rendering/models/mc/java_and_bedrock/data/MCMeshData.java',
