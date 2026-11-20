@@ -1,5 +1,6 @@
 package lib.kasuga.rendering.effect.builtin.blackhole;
 
+import lib.kasuga.shader.BoolExpr;
 import lib.kasuga.shader.FloatArrayExpr;
 import lib.kasuga.shader.FloatExpr;
 import lib.kasuga.shader.FragmentShaderBuilder;
@@ -54,6 +55,7 @@ public final class BlackHoleShaderProvider {
         FloatExpr chromaticScale = shader.exposeFloat(CHROMATIC_SCALE);
 
         FloatExpr aspect = shader.letFloat("aspect", screenSize.x().div(screenSize.y().max(1.0f)));
+        BoolExpr reversedDepth = shader.uniformBool("ReversedDepth", false);
         FloatExpr sceneDepth = shader.letFloat(
                 "sceneDepth", depthSampler.sample(shader.texCoord()).r()
         );
@@ -105,11 +107,12 @@ public final class BlackHoleShaderProvider {
                     "diskTilt", value(holeData, hole, 15).max(0.08f)
             );
 
-            FloatExpr depthVisible = shader.letFloat(
+            ShaderVariable<FloatExpr> depthVisible = shader.localFloat(
                     "depthVisible", sceneDepth.step(holeDepth.sub(0.0005f))
             );
+            shader.ifThen(reversedDepth, () -> depthVisible.set(holeDepth.add(0.0005f).step(sceneDepth)));
             FloatExpr visibility = shader.letFloat("visibility", shader.f32(1.0f).mix(
-                    depthVisible,
+                    depthVisible.get(),
                     useDepth.clamp(shader.f32(0.0f), shader.f32(1.0f))
             ));
             shader.ifThen(visibility.lte(shader.f32(0.0f)), shader::continueLoop);

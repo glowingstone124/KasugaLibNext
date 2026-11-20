@@ -11,7 +11,6 @@ import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.UniformType;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import lib.kasuga.KasugaLib;
-import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.effect.DuplicatePolicy;
 import lib.kasuga.rendering.effect.WorldPipelineSmoke;
 import lib.kasuga.rendering.effect.post.PostProcessContext;
@@ -112,7 +111,7 @@ public final class PostProcessGraphSmoke {
                 verifyPixels(image);
                 client.execute(() -> {
                     verifiedMain = true;
-                    finish(client);
+                    finish();
                 });
             } catch (RuntimeException error) {
                 failure = error;
@@ -123,7 +122,7 @@ public final class PostProcessGraphSmoke {
                 verifyProbe(image);
                 client.execute(() -> {
                     verifiedProbe = true;
-                    finish(client);
+                    finish();
                 });
             } catch (RuntimeException error) {
                 failure = error;
@@ -134,7 +133,7 @@ public final class PostProcessGraphSmoke {
                 verifyGenerated(image);
                 client.execute(() -> {
                     verifiedGenerated = true;
-                    finish(client);
+                    finish();
                 });
             } catch (RuntimeException error) {
                 failure = error;
@@ -243,7 +242,7 @@ public final class PostProcessGraphSmoke {
         }
     }
 
-    private static void finish(Minecraft client) {
+    private static void finish() {
         if (!verifiedMain || !verifiedProbe || !verifiedGenerated) return;
         generatedShader.close();
         LogUtils.getLogger().info("KASUGA_SHADER_DSL_PASS generated-fullscreen,uniform-defaults,uniform-overrides,std140,sampler");
@@ -253,7 +252,6 @@ public final class PostProcessGraphSmoke {
         require(hdr.isClosed() && ldr.isClosed() && depth.isClosed() && probeView.isClosed() && !registration.isActive(), "Graph targets did not retire");
         finished = true;
         LogUtils.getLogger().info("KASUGA_POST_GRAPH_PASS dependency-order,mrt,hdr-readback,scaled-copy,depth-readback,exception-isolation,replace,retire");
-        DocumentSmoke.start(client);
     }
 
     private static Identifier id(String path) { return Identifier.fromNamespaceAndPath(KasugaLib.MODID, path); }

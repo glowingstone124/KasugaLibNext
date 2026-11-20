@@ -5,6 +5,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.logging.LogUtils;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import lib.kasuga.KasugaLib;
+import lib.kasuga.rendering.effect.pipeline.WorldProjection;
 import lib.kasuga.scene.SceneHost;
 import lib.kasuga.scene.ScenePlacement;
 import lib.kasuga.scene.ScenePose;
@@ -55,7 +56,6 @@ public final class UIBackend implements AutoCloseable {
     private final Map<Renderable, Panel> panels = new LinkedHashMap<>();
     private final WorldUiInputRouter inputRouter = new WorldUiInputRouter();
     private final WorldUiKeyboardCapture keyboard = new WorldUiKeyboardCapture(inputRouter, KeyMapping::releaseAll);
-    private final Matrix4f projection = new Matrix4f();
     private @Nullable ClientLevel lastLevel;
     private @Nullable WorldUiCanvas.Painter painter;
     private @Nullable WorldUiCompositor compositor;
@@ -72,11 +72,6 @@ public final class UIBackend implements AutoCloseable {
     @SubscribeEvent
     public static void registerPipeline(RegisterRenderPipelinesEvent event) {
         event.registerPipeline(WorldUiCompositor.PIPELINE);
-    }
-
-    /** Copies the exact projection Minecraft uploads, including camera bob and portal effects. */
-    public static void captureProjection(Matrix4fc projection) {
-        MAIN_VIEW.projection.set(projection);
     }
 
     @SubscribeEvent(priority = EventPriority.LOWEST)
@@ -291,7 +286,7 @@ public final class UIBackend implements AutoCloseable {
         double x = cursor ? client.mouseHandler.getScaledXPos(client.getWindow()) : width * .5;
         double y = cursor ? client.mouseHandler.getScaledYPos(client.getWindow()) : height * .5;
         float depth = RenderSystem.getDevice().getDeviceInfo().isZZeroToOne() ? .5f : 0;
-        inputRouter.beginFrame(projection, width, height, x, y, 1, depth);
+        inputRouter.beginFrame(WorldProjection.current(), width, height, x, y, 1, depth);
     }
 
     private @Nullable Matrix4f viewPlacement(Minecraft client, CameraRenderState camera, float partialTick,

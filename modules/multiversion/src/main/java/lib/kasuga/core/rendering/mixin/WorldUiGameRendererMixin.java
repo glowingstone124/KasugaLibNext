@@ -3,7 +3,7 @@ package lib.kasuga.core.rendering.mixin;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import lib.kasuga.rendering.models.mc.backend.ui.GuiCanvasAccess;
-import lib.kasuga.rendering.models.mc.backend.ui.UIBackend;
+import lib.kasuga.rendering.effect.pipeline.WorldProjection;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.fog.FogRenderer;
 import net.neoforged.neoforge.client.gui.PictureInPictureRendererRegistration;
@@ -51,7 +51,7 @@ abstract class WorldUiGameRendererMixin implements GuiCanvasAccess.Factory {
     @ModifyArg(method = "renderLevel", at = @At(value = "INVOKE",
             target = "Lnet/minecraft/client/renderer/ProjectionMatrixBuffer;getBuffer(Lorg/joml/Matrix4f;)Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;"))
     private Matrix4f kasuga$worldUiProjection(Matrix4f projection) {
-        UIBackend.captureProjection(projection);
+        WorldProjection.capture(projection);
         return projection;
     }
 }
