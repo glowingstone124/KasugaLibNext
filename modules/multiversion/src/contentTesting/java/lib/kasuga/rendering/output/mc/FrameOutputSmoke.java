@@ -83,6 +83,7 @@ public final class FrameOutputSmoke {
         if (finished) return;
         if (failure != null) throw failure;
         if (!RemoteCameraSmoke.verify(client)) return;
+        if (!DetachedCameraIsolationSmoke.verify(client)) return;
         if (++frames > 240) throw new IllegalStateException("Frame output smoke expired without a readback");
         if (frames < 3 || !verifyDetachedViews(client)) return;
         if (mirror == null) {
