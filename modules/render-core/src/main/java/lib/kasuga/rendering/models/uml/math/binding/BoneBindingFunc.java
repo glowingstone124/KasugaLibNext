@@ -2,6 +2,7 @@ package lib.kasuga.rendering.models.uml.math.binding;
 
 import lib.kasuga.rendering.models.uml.math.BoneContext;
 import lib.kasuga.rendering.models.uml.math.DualQuaternion;
+import lib.kasuga.rendering.models.uml.math.QuaternionHelper;
 import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.math.binding.SDEFData;
 import lib.kasuga.rendering.models.uml.structure.basic.Mesh;
@@ -78,7 +79,7 @@ public interface BoneBindingFunc {
         Transform skin1 = boneCtx1.absTransform().copy().mul(boneCtx1.invTransform());
         Quaternionf rotation0 = skin0.getRotation().normalize();
         Quaternionf rotation1 = skin1.getRotation().normalize();
-        if (rotation0.dot(rotation1) < 0.0f) {
+        if (QuaternionHelper.dot(rotation0, rotation1) < 0.0f) {
             rotation1.set(-rotation1.x, -rotation1.y, -rotation1.z, -rotation1.w);
         }
         Quaternionf rotation = new Quaternionf(rotation0).slerp(rotation1, w1).normalize();

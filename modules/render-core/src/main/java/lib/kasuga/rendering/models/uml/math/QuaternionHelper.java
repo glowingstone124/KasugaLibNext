@@ -1,6 +1,7 @@
 package lib.kasuga.rendering.models.uml.math;
 
 import org.joml.Quaternionf;
+import org.joml.Quaternionfc;
 import org.joml.Vector3f;
 
 public class QuaternionHelper {
@@ -39,6 +40,11 @@ public class QuaternionHelper {
 
     public static Quaternionf fromXYZDegrees(Vector3f angles) {
         return fromXYZDegrees(angles.x(), angles.y(), angles.z());
+    }
+
+    /** Supports the JOML versions supplied by both Minecraft targets. */
+    public static float dot(Quaternionfc a, Quaternionfc b) {
+        return a.x() * b.x() + a.y() * b.y() + a.z() * b.z() + a.w() * b.w();
     }
 
     /**

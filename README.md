@@ -93,9 +93,11 @@ response share the existing RPC codecs and session handling.
 
 Model rendering uses Minecraft entity pipelines on the active graphics backend.
 Repeated opaque and cutout geometry uses hardware instancing, with per-instance
-placement, lighting, and rigid bone poses. When evaluated geometry differs
-between instances, it uses the standard submission path, as do translucent
-materials. Point, area, and volumetric lights use RenderPearl
+placement and lighting. Rigid poses use the instance transform. Compatible
+BDEF, SDEF, and QDEF models share binding-pose geometry and use a separate
+GPU bone palette for each instance. The standard submission path handles
+translucent materials and instances with different morphed geometry.
+Point, area, and volumetric lights use RenderPearl
 with the same lighting shader calculations as 1.21.1. Nested world scenes can
 own model and light nodes. Native Blockbench models use their authored Locator
 lights and the same evaluated bone pose as their geometry. See the
@@ -193,6 +195,7 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_PIPELINE_PASS`, `KASUGA_POST_GRAPH_PASS`,
 `KASUGA_SHADER_DSL_PASS`, `KASUGA_BLACK_HOLE_PASS`, `KASUGA_WORLD_UI_PASS`,
 `KASUGA_STAGE_PASS`, `KASUGA_SCENE_CLIENT_PASS`,
+`KASUGA_MODEL_INSTANCING_PASS`,
 `KASUGA_FRAME_OUTPUT_PASS`, `KASUGA_FRAME_WINDOW_PASS`, `KASUGA_PLAYER_CAMERA_PASS`,
 `KASUGA_DETACHED_CAMERA_PASS`, `KASUGA_REMOTE_CAMERA_PASS`, `KASUGA_CAMERA_HISTORY_PASS`, and `KASUGA_SCRIPTING_PASS`.
 Captures of the models, animation, lighting, held documents, and GUI previews

@@ -93,7 +93,7 @@ public final class RenderPearlWorldModels {
         if (model.isClosed()) return;
         float partialTick = event.getDeltaTracker().getGameTimeDeltaPartialTick(false);
         List<RenderPearlModelGeometry.Batch> batches =
-                RenderPearlModelGeometry.capture(model, textures, packedLight, partialTick, event);
+                RenderPearlModelGeometry.capture(model, textures, packedLight, partialTick, event, true);
         if (!batches.isEmpty()) {
             PoseStack pose = new PoseStack();
             pose.mulPose(cameraRelative);

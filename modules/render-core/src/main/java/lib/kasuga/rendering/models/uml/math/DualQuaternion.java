@@ -152,7 +152,7 @@ public class DualQuaternion {
             float weight = pair.getSecond();
             if (weight == 0f) continue;
             if (reference == null) reference = dq.real;
-            if (reference.dot(dq.real) < 0f) weight = -weight;
+            if (QuaternionHelper.dot(reference, dq.real) < 0f) weight = -weight;
             blended.real.set(blended.real.x + dq.real.x * weight, blended.real.y + dq.real.y * weight,
                     blended.real.z + dq.real.z * weight, blended.real.w + dq.real.w * weight);
             blended.dual.set(blended.dual.x + dq.dual.x * weight, blended.dual.y + dq.dual.y * weight,

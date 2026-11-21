@@ -5,9 +5,19 @@ import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.math.Transform;
+import lib.kasuga.rendering.models.uml.math.binding.BoneBindingFunc;
+import lib.kasuga.rendering.models.uml.math.binding.SDEFData;
 import lib.kasuga.rendering.models.uml.structure.Model;
+import lib.kasuga.rendering.models.uml.structure.basic.BoneBinding;
+import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
+import lib.kasuga.rendering.models.uml.structure.basic.data.BoneBindingData;
+import lib.kasuga.rendering.models.uml.structure.basic.data.vertex.SDEFBoneBindingData;
+import lib.kasuga.rendering.models.uml.structure.skeleton.Anchor;
+import lib.kasuga.rendering.models.uml.structure.skeleton.Bone;
+import lib.kasuga.rendering.models.uml.structure.skeleton.Skeleton;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfLoader;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfModelConverter;
+import lib.kasuga.structure.Pair;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
@@ -43,6 +53,7 @@ public final class ModelInstancingSmoke {
     private static boolean capturing;
     private static boolean finished;
     private static boolean cutout;
+    private static boolean skinning;
     private static int frames;
     private static int opaquePixels;
     private static Sample reference;
@@ -79,7 +90,8 @@ public final class ModelInstancingSmoke {
                 sample = sample(image);
                 String material = cutout ? "mask" : "opaque";
                 String path = directFrame ? "direct" : "instanced";
-                image.writeToFile(client.gameDirectory.toPath().resolve("kasuga-model-batching-" + material + "-" + path + ".png"));
+                String pose = skinning ? "skinned-" : "";
+                image.writeToFile(client.gameDirectory.toPath().resolve("kasuga-model-batching-" + pose + material + "-" + path + ".png"));
             } catch (IOException failure) {
                 throw new IllegalStateException("Could not save the model batching frame", failure);
             }
@@ -94,6 +106,7 @@ public final class ModelInstancingSmoke {
                     return;
                 }
                 if (stats.instancedModels() != COUNT || stats.draws() != 1 || stats.geometryVertices() > 8
+                        || stats.skinnedModels() != (skinning ? COUNT : 0)
                         || Math.abs(sample.pixels() - reference.pixels()) > 40
                         || Math.abs(sample.averageGreen() - reference.averageGreen()) > 2) {
                     throw new IllegalStateException("Instanced frame differs from direct: " + sample + " vs "
@@ -102,16 +115,18 @@ public final class ModelInstancingSmoke {
                 if (cutout && sample.pixels() >= opaquePixels * .8) {
                     throw new IllegalStateException("Alpha cutout did not discard masked pixels");
                 }
-                LOGGER.info("KASUGA_MODEL_INSTANCING_PASS material={} models={} draws={} geometryVertices={} pixels={}",
-                        cutout ? "MASK" : "OPAQUE", stats.instancedModels(), stats.draws(), stats.geometryVertices(), sample.pixels());
+                LOGGER.info("KASUGA_MODEL_INSTANCING_PASS material={} models={} draws={} geometryVertices={} gpuSkinnedModels={} pixels={}",
+                        cutout ? "MASK" : "OPAQUE", stats.instancedModels(), stats.draws(), stats.geometryVertices(),
+                        stats.skinnedModels(), sample.pixels());
                 for (ModelInstance model : instanced) model.close();
                 for (ModelInstance model : direct) model.close();
                 client.getTextureManager().release(WHITE);
-                if (cutout) {
+                if (cutout && skinning) {
                     finished = true;
                 } else {
-                    opaquePixels = sample.pixels();
-                    cutout = true;
+                    if (!cutout) opaquePixels = sample.pixels();
+                    else skinning = true;
+                    cutout = !cutout;
                     started = false;
                     capturing = false;
                     frames = 0;
@@ -139,13 +154,42 @@ public final class ModelInstancingSmoke {
 
     private static Model load(Minecraft client) throws IOException {
         try (InputStream input = client.getResourceManager().open(cutout ? MASK : MODEL)) {
-            return GltfModelConverter.convert(GltfLoader.load(input));
+            Model model = GltfModelConverter.convert(GltfLoader.load(input));
+            return skinning ? twoBoneModel(model) : model;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Model twoBoneModel(Model model) {
+        Bone root = new Bone("root", new Transform(), null);
+        Bone tip = new Bone("tip", new Transform().translate(.07f, .1f, 0), null);
+        root.setChildren(new Bone[]{tip});
+        tip.setParent(root);
+        Bone[] bones = {root, tip};
+        Skeleton skeleton = new Skeleton(bones, root, new Anchor[0], null, new Transform());
+        Vertex[] vertices = model.getVertices();
+        for (int i = 0; i < vertices.length; i++) {
+            float rootWeight = .25f + (i % 3) * .2f;
+            Pair<Bone, Float>[] weights = new Pair[]{Pair.of(root, rootWeight), Pair.of(tip, 1f - rootWeight)};
+            BoneBindingFunc type = switch (i % 3) {
+                case 0 -> BoneBindingFunc.BDEF;
+                case 1 -> BoneBindingFunc.SDEF;
+                default -> BoneBindingFunc.QDEF;
+            };
+            SphericalBinding data = i % 3 == 1 ? new SphericalBinding(new SDEFData(new Vector3f(0, .1f, 0),
+                    new Vector3f(.04f, 0, 0), new Vector3f(-.03f, .01f, 0))) : null;
+            vertices[i].setBinding(new BoneBinding(weights, type, data));
+        }
+        return new Model(vertices, model.getMeshes(), bones, skeleton, model.getMaterialSet(), model.getMeshMode(), null, null);
     }
 
     private static ModelInstance create(Model model, int index) {
         ModelInstance instance = new ModelInstance(model, null, null, null, null, null);
         instance.getSkeletonInstance().transformRoot(new Transform().translate((index % 3 - 1) * .1f, 0, 0));
+        if (skinning) {
+            instance.getSkeletonInstance().transform("tip", new Transform().translate(0, (index % 4 - 1) * .05f, 0)
+                    .rotate(0, (index % 7 - 3) * 8, (index % 5 - 2) * 4, true));
+        }
         return instance;
     }
 
@@ -168,4 +212,6 @@ public final class ModelInstancingSmoke {
     }
 
     private record Sample(int pixels, double averageGreen) {}
+
+    private record SphericalBinding(SDEFData getSDEFData) implements BoneBindingData, SDEFBoneBindingData {}
 }
