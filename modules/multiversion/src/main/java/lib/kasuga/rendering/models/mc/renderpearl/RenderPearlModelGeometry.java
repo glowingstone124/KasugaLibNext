@@ -48,17 +48,16 @@ final class RenderPearlModelGeometry {
             MCMeshData nativeFace = mesh.getData() instanceof MCMeshData data ? data : null;
             if (nativeFace != null && !nativeFace.isVisible()) continue;
             for (Material material : mesh.getMaterials()) {
-                Surface surface = surfaces.computeIfAbsent(material, key -> surface(model, key, textures, light));
+                Surface surface = surfaces.computeIfAbsent(material, key -> surface(model, key, textures));
                 Vector4f color = surface.color();
                 if (mesh.getData() instanceof ColorizedMeshData tinted && tinted.getColor() != null) {
                     color = new Vector4f(color).mul(tinted.getColor());
                 }
-                int faceLight = nativeFace != null && nativeFace.isEmissive()
-                        ? LightCoordsUtil.FULL_BRIGHT : surface.light();
+                boolean emissive = surface.sprite().emissive || nativeFace != null && nativeFace.isEmissive();
                 List<Corner> group = groups.computeIfAbsent(surface.layer(), key -> new ArrayList<>());
                 List<Corner> face = new ArrayList<>(vertices.length);
                 for (Vertex vertex : vertices) {
-                    face.add(corner(model, mesh, vertex, surface, color, faceLight, boneContexts));
+                    face.add(corner(model, mesh, vertex, surface, color, emissive, boneContexts));
                 }
                 appendFace(group, face);
                 if (!surface.sprite().culled && surface.layer().pipeline().isCull()) {
@@ -67,7 +66,7 @@ final class RenderPearlModelGeometry {
             }
         }
         List<Batch> batches = new ArrayList<>(groups.size());
-        groups.forEach((layer, corners) -> batches.add(new Batch(layer, List.copyOf(corners))));
+        groups.forEach((layer, corners) -> batches.add(new Batch(layer, List.copyOf(corners), light)));
         return List.copyOf(batches);
     }
 
@@ -85,7 +84,7 @@ final class RenderPearlModelGeometry {
         }
     }
 
-    private static Surface surface(ModelInstance model, Material material, Function<Texture, Identifier> textures, int light) {
+    private static Surface surface(ModelInstance model, Material material, Function<Texture, Identifier> textures) {
         Sprite sprite = model.getMaterialSprite(material);
         Identifier texture = Objects.requireNonNull(textures.apply(sprite.getTexture()), "texture identifier");
         MaterialData materialData = material.getData();
@@ -97,11 +96,11 @@ final class RenderPearlModelGeometry {
         };
         Vector4f color = new Vector4f(1f);
         model.getMaterialColor(material, sprite, color);
-        return new Surface(material, sprite, layer, color, sprite.emissive ? LightCoordsUtil.FULL_BRIGHT : light);
+        return new Surface(material, sprite, layer, color);
     }
 
     private static Corner corner(ModelInstance model, Mesh mesh, Vertex vertex, Surface surface,
-                                 Vector4f color, int light, List<BoneContext> boneContexts) {
+                                 Vector4f color, boolean emissive, List<BoneContext> boneContexts) {
         Vector3f position = new Vector3f();
         Vector3f normal = new Vector3f();
         Vector2f uv = new Vector2f();
@@ -123,23 +122,31 @@ final class RenderPearlModelGeometry {
         float v = sprite.flipV ? 1f - uv.y : uv.y;
         Vector2f mapped = new Vector2f(sprite.getUv0()).lerp(sprite.getUv1(), u)
                 .lerp(new Vector2f(sprite.getUv3()).lerp(sprite.getUv2(), u), v);
-        return new Corner(position, normal, mapped, color, light);
+        return new Corner(position, normal, mapped, color, emissive);
     }
 
-    record Batch(RenderType layer, List<Corner> corners) {
+    record Batch(RenderType layer, List<Corner> corners, int packedLight) {
         void submit(PoseStack.Pose pose, VertexConsumer consumer) {
+            submit(pose, consumer, packedLight);
+        }
+
+        void submitShared(VertexConsumer consumer) {
+            submit(new PoseStack().last(), consumer, 0);
+        }
+
+        private void submit(PoseStack.Pose pose, VertexConsumer consumer, int light) {
             for (Corner corner : corners) {
                 Vector4f color = corner.color();
                 consumer.addVertex(pose, corner.position())
                         .setColor(color.x, color.y, color.z, color.w)
                         .setUv(corner.uv().x, corner.uv().y)
                         .setOverlay(OverlayTexture.NO_OVERLAY)
-                        .setLight(corner.light())
+                        .setLight(corner.emissive() ? LightCoordsUtil.FULL_BRIGHT : light)
                         .setNormal(pose, corner.normal());
             }
         }
     }
 
-    private record Surface(Material material, Sprite sprite, RenderType layer, Vector4f color, int light) {}
-    private record Corner(Vector3f position, Vector3f normal, Vector2f uv, Vector4f color, int light) {}
+    private record Surface(Material material, Sprite sprite, RenderType layer, Vector4f color) {}
+    private record Corner(Vector3f position, Vector3f normal, Vector2f uv, Vector4f color, boolean emissive) {}
 }

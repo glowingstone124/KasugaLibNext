@@ -21,6 +21,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
+import net.neoforged.neoforge.client.submit.RenderPhaseKeys;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import org.joml.Matrix4d;
 import org.joml.Matrix4dc;
@@ -95,7 +96,14 @@ public final class RenderPearlWorldModels {
             PoseStack pose = new PoseStack();
             pose.mulPose(cameraRelative);
             MinecraftModelSource.Context context = new MinecraftModelSource.Context(pose, event, partialTick, packedLight);
-            for (RenderPearlModelGeometry.Batch batch : batches) context.submit(batch.layer(), batch::submit);
+            for (RenderPearlModelGeometry.Batch batch : batches) {
+                if (RenderPearlModelBatcher.supports(batch.layer())) {
+                    context.submit((stack, collector) -> collector.submitSpecial(RenderPhaseKeys.SOLID,
+                            new RenderPearlModelBatcher.Submit(model.getModel(), batch, stack.last().copy())));
+                } else {
+                    context.submit(batch.layer(), batch::submit);
+                }
+            }
         }
         if (!(model.getModel().getModelData() instanceof ModelComponentsHolder holder)) return;
         ModelComponents components = holder.components();

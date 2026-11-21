@@ -188,7 +188,8 @@ public final class RenderPearlClientSmoke {
     public static void afterFrame(RenderFrameEvent.Post event) throws Exception {
         if (modelsVerified) {
             Minecraft client = Minecraft.getInstance();
-            if (MmdModelSmoke.needsFrames()) MmdModelSmoke.afterFrame(client);
+            if (ModelInstancingSmoke.needsFrames()) ModelInstancingSmoke.afterFrame(client);
+            else if (MmdModelSmoke.needsFrames()) MmdModelSmoke.afterFrame(client);
             else if (PostProcessGraphSmoke.needsFrames()) PostProcessGraphSmoke.afterFrame(client);
             else if (BlackHoleSmoke.needsFrames()) BlackHoleSmoke.afterFrame(client);
             else if (ParticleSmoke.needsFrames()) ParticleSmoke.afterFrame(client);
