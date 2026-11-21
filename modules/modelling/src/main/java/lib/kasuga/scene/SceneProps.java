@@ -1,23 +1,13 @@
 package lib.kasuga.scene;
 
 import lib.kasuga.KasugaLib;
-import lib.kasuga.rendering.effect.RenderPipelineRegistrar;
-import lib.kasuga.rendering.effect.WorldRenderPipelineContext;
-import lib.kasuga.rendering.effect.pipeline.RenderPhase;
-import lib.kasuga.rendering.effect.pipeline.RenderPipelineDescriptor;
 import lib.kasuga.rendering.models.uml.dynamic.physics.box3d.NativeBox3D;
 import lib.kasuga.rendering.models.uml.dynamic.physics.core.GenericRigidBody;
 import lib.kasuga.rendering.models.uml.dynamic.physics.core.RigidBodyWorld;
-import lib.kasuga.rendering.models.mc.dynamic.physics.PhysicsBlockRenderer;
 import lib.kasuga.rendering.models.mc.dynamic.physics.PhysicsLightSampler;
-import lib.kasuga.rendering.models.mc.dynamic.physics.MinecraftBlockPhysics;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -37,7 +27,7 @@ import java.util.Set;
 
 /** Scoped vanilla block/item props, optionally using the built-in rigid-body world and soft grab. */
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
-public final class SceneProps implements AutoCloseable {
+public final class SceneProps extends ScenePropPlatform implements AutoCloseable {
     private static final Set<SceneProps> SCENES = new LinkedHashSet<>();
     private final ClientLevel level;
     private final List<Prop> props = new ArrayList<>();
@@ -50,11 +40,6 @@ public final class SceneProps implements AutoCloseable {
     public static SceneProps open(ClientLevel level) { return new SceneProps(java.util.Objects.requireNonNull(level)); }
     public static boolean physicsAvailable() { return NativeBox3D.availableOrWarn(); }
     public static int activeScenes() { return SCENES.size(); }
-    public static void initialize(RenderPipelineRegistrar registrar) {
-        MinecraftBlockPhysics.initialize(registrar);
-        registrar.world(RenderPipelineDescriptor.builder(ResourceLocation.fromNamespaceAndPath(KasugaLib.MODID,
-                "scene/vanilla_props"), RenderPhase.AFTER_BLOCK_ENTITIES).priority(100).build(), SceneProps::render);
-    }
     private void requireOpen() { if (closed) throw new IllegalStateException("Prop scene is closed"); }
     private RigidBodyWorld physics() {
         requireOpen();
@@ -115,38 +100,21 @@ public final class SceneProps implements AutoCloseable {
     }
     @SubscribeEvent public static void frame(RenderFrameEvent.Pre event) {
         var mc = Minecraft.getInstance();
-        if (mc.isPaused() || mc.screen != null) return;
+        if (mc.isPaused() || screenOpen(mc)) return;
         float seconds = Math.min(.1f, event.getPartialTick().getRealtimeDeltaTicks() / 20);
         for (var scene : List.copyOf(SCENES)) if (scene.physics != null) {
             scene.physics.step(seconds, RigidBodyWorld.KinematicDriver.none());
         }
     }
-    private static void render(WorldRenderPipelineContext context) {
-        var camera = context.camera().getPosition();
-        var poses = context.poseStack();
-        for (var scene : SCENES) {
-            if (scene.level != context.level()) continue;
-            for (var prop : scene.props) {
-                if (!prop.visible) continue;
-                var pos = prop.position();
-                poses.pushPose();
-                poses.translate(pos.x - camera.x, pos.y - camera.y, pos.z - camera.z);
-                poses.mulPose(prop.body == null ? prop.rotation : prop.body.interpolationRotationRef());
-                poses.scale(prop.scale.x, prop.scale.y, prop.scale.z);
-                if (prop.block != null) {
-                    poses.translate(-.5, -.5, -.5);
-                    PhysicsBlockRenderer.renderTerrain(context.minecraft().getBlockRenderer(), prop.block, poses,
-                            context.bufferSource(), prop.light(scene.level), OverlayTexture.NO_OVERLAY,
-                            scene.level, pos, prop.body == null ? prop.rotation : prop.body.interpolationRotationRef(), prop.lightAnchor);
-                } else context.minecraft().getItemRenderer().renderStatic(prop.item, ItemDisplayContext.FIXED,
-                        LevelRenderer.getLightColor(scene.level, BlockPos.containing(pos)), OverlayTexture.NO_OVERLAY,
-                        poses, context.bufferSource(), scene.level, 0);
-                poses.popPose();
+    static void visitVisible(ClientLevel level, java.util.function.Consumer<Prop> visitor) {
+        for (SceneProps scene : SCENES) {
+            if (scene.level != level) continue;
+            for (Prop prop : scene.props) {
+                if (prop.visible) visitor.accept(prop);
             }
         }
-        MinecraftBlockPhysics.renderInto(context);
-        context.bufferSource().endBatch();
     }
+
     @Override public void close() {
         if (closed) return;
         release(); closed = true;
@@ -187,7 +155,13 @@ public final class SceneProps implements AutoCloseable {
         public Prop visible(boolean value) { visible = value; return this; }
         public boolean visible() { return visible; }
 
-        private PhysicsLightSampler.Sample light(ClientLevel level) {
+        BlockState block() { return block; }
+        ItemStack item() { return item; }
+        Quaternionf renderRotation() { return body == null ? rotation : body.interpolationRotationRef(); }
+        Vector3f renderScale() { return scale; }
+        BlockPos lightAnchor() { return lightAnchor; }
+
+        PhysicsLightSampler.Sample light(ClientLevel level) {
             Vec3 pos = position();
             Vector3f extent = new Vector3f(
                     Math.min(.75f, scale.x * .5f), Math.min(.75f, scale.y * .5f), Math.min(.75f, scale.z * .5f));

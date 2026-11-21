@@ -1,12 +1,15 @@
 package lib.kasuga.rendering.models.mc.scene;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.block.MovingBlockRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ExtractLevelRenderStateEvent;
@@ -123,6 +126,19 @@ public interface MinecraftModelSource extends AutoCloseable {
 
         public void submit(RenderType layer, SubmitNodeCollector.CustomGeometryRenderer geometry) {
             submit((stack, collector) -> collector.submitCustomGeometry(stack, layer, geometry));
+        }
+
+        /** Uses the live biome and lightmap with a stable model seed for a moving block. */
+        public void submitMovingBlock(ClientLevel level, BlockState block, BlockPos position, BlockPos seedPosition) {
+            if (block.getRenderShape() != RenderShape.MODEL) return;
+            MovingBlockRenderState state = new MovingBlockRenderState();
+            state.blockState = block;
+            state.randomSeedPos = seedPosition;
+            state.blockPos = position;
+            state.biome = level.getBiome(position);
+            state.cardinalLighting = level.cardinalLighting();
+            state.lightEngine = level.getLightEngine();
+            submit((stack, nodes) -> nodes.submitMovingBlock(stack, state, 0));
         }
 
         /** Submit the extracted state of a native renderer; the world collector may consume it later in the frame. */

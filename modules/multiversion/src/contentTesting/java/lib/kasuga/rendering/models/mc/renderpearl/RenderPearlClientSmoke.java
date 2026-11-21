@@ -192,6 +192,7 @@ public final class RenderPearlClientSmoke {
             else if (ModelDepthBiasSmoke.needsFrames()) ModelDepthBiasSmoke.afterFrame(client);
             else if (MmdModelSmoke.needsFrames()) MmdModelSmoke.afterFrame(client);
             else if (RagdollSmoke.needsFrames()) RagdollSmoke.afterFrame(client);
+            else if (StageSmoke.needsFrames()) StageSmoke.afterFrame(client);
             else if (PostProcessGraphSmoke.needsFrames()) PostProcessGraphSmoke.afterFrame(client);
             else if (BlackHoleSmoke.needsFrames()) BlackHoleSmoke.afterFrame(client);
             else if (ParticleSmoke.needsFrames()) ParticleSmoke.afterFrame(client);
