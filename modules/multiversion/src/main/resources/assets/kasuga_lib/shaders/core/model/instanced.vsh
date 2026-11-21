@@ -41,7 +41,8 @@ layout(location = 6) out vec2 texCoord0;
 void main() {
     ModelInstance instance = Instances[gl_InstanceIndex];
     vec3 position = (instance.placement * vec4(Position, 1.0)).xyz;
-    vec3 normal = normalize(instance.normal * Normal);
+    vec3 normal = instance.normal * Normal;
+    normal = dot(normal, normal) > 0.0 ? normalize(normal) : vec3(0.0, 1.0, 0.0);
     gl_Position = ProjMat * ModelViewMat * vec4(position, 1.0);
     sphericalVertexDistance = fog_spherical_distance(position);
     cylindricalVertexDistance = fog_cylindrical_distance(position);

@@ -43,8 +43,12 @@ public final class KsgPmxLoader {
     private KsgPmxLoader() {}
 
     public static RenderPearlModelSource open(Identifier identifier) throws IOException {
-        if (identifier.getPath().endsWith(".zip")) return openArchive(identifier, null);
-        ResourceManager resources = Minecraft.getInstance().getResourceManager();
+        return open(Minecraft.getInstance().getResourceManager(), identifier, null);
+    }
+
+    public static RenderPearlModelSource open(ResourceManager resources, Identifier identifier,
+                                             String archiveEntry) throws IOException {
+        if (identifier.getPath().endsWith(".zip")) return openArchive(resources, identifier, archiveEntry);
         Model model;
         try (InputStream input = resources.open(identifier)) {
             model = load(identifier, ByteBuffer.wrap(input.readAllBytes()), new Vector3f(MmdMeshLoader.DEFAULT_MODEL_SCALE), path -> {
@@ -60,7 +64,11 @@ public final class KsgPmxLoader {
 
     /** Opens the requested archive entry or the first model in normalized path order. */
     public static RenderPearlModelSource openArchive(Identifier identifier, String modelEntry) throws IOException {
-        ResourceManager resources = Minecraft.getInstance().getResourceManager();
+        return openArchive(Minecraft.getInstance().getResourceManager(), identifier, modelEntry);
+    }
+
+    private static RenderPearlModelSource openArchive(ResourceManager resources, Identifier identifier,
+                                                       String modelEntry) throws IOException {
         ZipMeta metadata = archiveMetadata(resources, identifier);
         Charset charset = metadata == null ? StandardCharsets.UTF_8 : metadata.getCharset();
         Vector3f scale = metadata == null ? new Vector3f(MmdMeshLoader.DEFAULT_MODEL_SCALE) : metadata.getModelScale();

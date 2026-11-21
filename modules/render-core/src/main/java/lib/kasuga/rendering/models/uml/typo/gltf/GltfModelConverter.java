@@ -37,7 +37,11 @@ public final class GltfModelConverter {
     private GltfModelConverter() {}
 
     public static Model convert(GltfAsset asset) {
-        return convert(asset, new Vector3f(1f), (index, texture) -> new Texture(texture.name(),
+        return convertWithScale(asset, new Vector3f(1f));
+    }
+
+    public static Model convertWithScale(GltfAsset asset, Vector3f modelScale) {
+        return convert(asset, modelScale, (index, texture) -> new Texture(texture.name(),
                 texture.image().getWidth(), texture.image().getHeight(),
                 new GltfModelData.GltfTextureData(texture.name(), texture.image())));
     }

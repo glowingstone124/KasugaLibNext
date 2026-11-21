@@ -1,8 +1,5 @@
 package lib.kasuga.rendering.models.mc.dynamic.physics;
 
-import com.mojang.blaze3d.vertex.PoseStack;
-import lib.kasuga.rendering.effect.RenderPipelineRegistrar;
-import lib.kasuga.rendering.effect.WorldRenderPipelineContext;
 import lib.kasuga.rendering.models.uml.dynamic.physics.core.BodyContact;
 import lib.kasuga.rendering.models.uml.dynamic.physics.core.CollisionEnvironment;
 import lib.kasuga.rendering.models.uml.dynamic.physics.core.Frames;
@@ -13,8 +10,6 @@ import lib.kasuga.rendering.models.uml.dynamic.physics.box3d.NativeBox3D;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.state.BlockState;
@@ -47,7 +42,7 @@ import java.util.Set;
  * drawn with the vanilla block renderer, so every modelled block works.</p>
  */
 @EventBusSubscriber(value = Dist.CLIENT)
-public final class MinecraftBlockPhysics {
+public final class MinecraftBlockPhysics extends PhysicsBlockHost {
     /** Upper bound on simultaneously simulated physics blocks. */
     public static final int MAX_PROPS = 256;
     private static final float PLAYER_PROXY_MASS = 4f;
@@ -81,11 +76,6 @@ public final class MinecraftBlockPhysics {
     };
 
     private MinecraftBlockPhysics() {}
-
-    /** Registers the shared physics block render resources through Kasuga's pipeline API. */
-    public static void initialize(RenderPipelineRegistrar registrar) {
-        PhysicsBlockRenderer.initialize(registrar);
-    }
 
     // ------------------------------------------------------------------
     // Public control surface
@@ -124,7 +114,10 @@ public final class MinecraftBlockPhysics {
     /** Removes one prop from simulation; returns false when it was already gone. */
     public static synchronized boolean remove(MinecraftBlockRigidBody prop) {
         boolean removed = PROPS.remove(prop);
-        if (removed) world.remove(prop.body());
+        if (removed) {
+            world.remove(prop.body());
+            if (PROPS.isEmpty()) removePlayerCollider();
+        }
         return removed;
     }
 
@@ -154,8 +147,7 @@ public final class MinecraftBlockPhysics {
     }
 
     private static void bind(ClientLevel level) {
-        clear();
-        if (environment != null) environment.close();
+        releaseWorld();
         boundLevel = level;
         world = new RigidBodyWorld(List.of(), List.of(), RigidBodyWorld.DEFAULT_SUBSTEP_COUNT);
         if (level != null) {
@@ -171,20 +163,23 @@ public final class MinecraftBlockPhysics {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         ClientLevel level = Minecraft.getInstance().level;
-        if (level != boundLevel) {
-            // Dimension changed: drop the whole playground including terrain cache.
-            clear();
-            if (environment != null) environment.close();
-            environment = null;
-            boundLevel = level;
-            world = null;
-        }
+        if (level == boundLevel) return;
+        releaseWorld();
+        boundLevel = level;
+    }
+
+    private static void releaseWorld() {
+        clear();
+        if (world != null) world.close();
+        if (environment != null) environment.close();
+        world = null;
+        environment = null;
     }
 
     @SubscribeEvent
     public static void onRenderFrame(RenderFrameEvent.Pre event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (world == null || minecraft.level == null || minecraft.isPaused()) return;
+        if (world == null || PROPS.isEmpty() || minecraft.level == null || minecraft.isPaused()) return;
         syncPlayerCollider(minecraft.player);
         float deltaSeconds = event.getPartialTick().getRealtimeDeltaTicks() / 20f;
         world.step(deltaSeconds, ENTITY_DRIVER);
@@ -360,36 +355,10 @@ public final class MinecraftBlockPhysics {
             world.remove(prop.body());
             return true;
         });
+        if (PROPS.isEmpty()) removePlayerCollider();
     }
 
-    // ------------------------------------------------------------------
-    // Rendering
-    // ------------------------------------------------------------------
-
-    /** Renders physics blocks into a host-owned Kasuga world pipeline. */
-    public static void renderInto(WorldRenderPipelineContext context) {
-        Minecraft minecraft = context.minecraft();
-        List<MinecraftBlockRigidBody> snapshot;
-        synchronized (MinecraftBlockPhysics.class) {
-            if (PROPS.isEmpty()) return;
-            snapshot = new ArrayList<>(PROPS);
-        }
-        ClientLevel level = context.level();
-        if (level == null) return;
-        PoseStack poses = context.poseStack();
-        MultiBufferSource.BufferSource buffers = context.bufferSource();
-        Vec3 camera = context.camera().getPosition();
-        for (MinecraftBlockRigidBody prop : snapshot) {
-            Vector3f position = prop.body().positionRef();
-            Quaternionf rotation = prop.body().rotationRef();
-            poses.pushPose();
-            poses.translate(position.x - camera.x, position.y - camera.y, position.z - camera.z);
-            poses.mulPose(rotation);
-            poses.translate(-MinecraftBlockRigidBody.HALF_EXTENT,
-                    -MinecraftBlockRigidBody.HALF_EXTENT, -MinecraftBlockRigidBody.HALF_EXTENT);
-            PhysicsBlockRenderer.renderTerrain(minecraft.getBlockRenderer(), prop.state(), poses, buffers,
-                    prop.lightSample(level), OverlayTexture.NO_OVERLAY, level, prop.position(), rotation, prop.lightAnchor());
-            poses.popPose();
-        }
+    static synchronized List<MinecraftBlockRigidBody> snapshot() {
+        return List.copyOf(PROPS);
     }
 }

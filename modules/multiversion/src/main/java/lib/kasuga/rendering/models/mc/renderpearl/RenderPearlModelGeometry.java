@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import lib.kasuga.rendering.models.mc.java_and_bedrock.data.MCMeshData;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.math.BoneContext;
+import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.math.binding.BoneBindingFunc;
 import lib.kasuga.rendering.models.uml.structure.basic.Mesh;
 import lib.kasuga.rendering.models.uml.structure.basic.Vertex;
@@ -14,6 +15,7 @@ import lib.kasuga.rendering.models.uml.structure.material.Sprite;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
 import lib.kasuga.rendering.models.uml.structure.material.data.MaterialAlphaMode;
 import lib.kasuga.rendering.models.uml.structure.material.data.MaterialData;
+import lib.kasuga.rendering.models.uml.structure.skeleton.Bone;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
@@ -22,6 +24,7 @@ import net.minecraft.util.LightCoordsUtil;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
+import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +45,7 @@ final class RenderPearlModelGeometry {
         Map<RenderType, List<Corner>> groups = new LinkedHashMap<>();
         Map<Material, Surface> surfaces = new IdentityHashMap<>();
         List<BoneContext> boneContexts = new ArrayList<>();
+        Map<Bone, Transform> rigidPoses = new IdentityHashMap<>();
         for (Mesh mesh : model.getModel().getMeshes()) {
             Vertex[] vertices = mesh.getVertices();
             if (!mesh.isVisible() || vertices.length < 3) continue;
@@ -57,7 +61,7 @@ final class RenderPearlModelGeometry {
                 List<Corner> group = groups.computeIfAbsent(surface.layer(), key -> new ArrayList<>());
                 List<Corner> face = new ArrayList<>(vertices.length);
                 for (Vertex vertex : vertices) {
-                    face.add(corner(model, mesh, vertex, surface, color, emissive, boneContexts));
+                    face.add(corner(model, mesh, vertex, surface, color, emissive, boneContexts, rigidPoses));
                 }
                 appendFace(group, face);
                 if (!surface.sprite().culled && surface.layer().pipeline().isCull()) {
@@ -66,7 +70,7 @@ final class RenderPearlModelGeometry {
             }
         }
         List<Batch> batches = new ArrayList<>(groups.size());
-        groups.forEach((layer, corners) -> batches.add(new Batch(layer, List.copyOf(corners), light)));
+        groups.forEach((layer, corners) -> batches.add(finishBatch(layer, corners, light)));
         return List.copyOf(batches);
     }
 
@@ -100,7 +104,8 @@ final class RenderPearlModelGeometry {
     }
 
     private static Corner corner(ModelInstance model, Mesh mesh, Vertex vertex, Surface surface,
-                                 Vector4f color, boolean emissive, List<BoneContext> boneContexts) {
+                                 Vector4f color, boolean emissive, List<BoneContext> boneContexts,
+                                 Map<Bone, Transform> rigidPoses) {
         Vector3f position = new Vector3f();
         Vector3f normal = new Vector3f();
         Vector2f uv = new Vector2f();
@@ -108,7 +113,16 @@ final class RenderPearlModelGeometry {
         model.getVertexNormal(vertex, mesh, normal);
         model.getVertexUv(vertex, mesh, surface.material(), uv);
         BoneBindingFunc skin = vertex.getBinding().getFunc();
-        if (skin != BoneBindingFunc.IDENTITY && vertex.getBinding().getWeights().length != 0) {
+        Transform rigidPose = null;
+        if (skin == BoneBindingFunc.BDEF && vertex.getBinding().getWeights().length == 1
+                && vertex.getBinding().getWeights()[0].getSecond() == 1f) {
+            Bone bone = vertex.getBinding().getWeights()[0].getFirst();
+            rigidPose = rigidPoses.computeIfAbsent(bone, ignored -> {
+                model.getSkeletonInstance().collectBoneContexts(boneContexts, vertex);
+                BoneContext<?> context = boneContexts.getFirst();
+                return context.absTransform().copy().mul(context.invTransform());
+            });
+        } else if (skin != BoneBindingFunc.IDENTITY && vertex.getBinding().getWeights().length != 0) {
             model.getSkeletonInstance().collectBoneContexts(boneContexts, vertex);
             HashMap<Mesh, Vector3f> normals = new HashMap<>();
             normals.put(mesh, normal);
@@ -122,31 +136,69 @@ final class RenderPearlModelGeometry {
         float v = sprite.flipV ? 1f - uv.y : uv.y;
         Vector2f mapped = new Vector2f(sprite.getUv0()).lerp(sprite.getUv1(), u)
                 .lerp(new Vector2f(sprite.getUv3()).lerp(sprite.getUv2(), u), v);
-        return new Corner(position, normal, mapped, color, emissive);
+        return new Corner(position, normal, mapped, color, emissive, rigidPose);
     }
 
-    record Batch(RenderType layer, List<Corner> corners, int packedLight) {
+    private static Batch finishBatch(RenderType layer, List<Corner> corners, int light) {
+        Transform rigidPose = corners.getFirst().rigidPose();
+        boolean common = true;
+        for (Corner corner : corners) {
+            if (corner.rigidPose() == rigidPose) continue;
+            common = false;
+            break;
+        }
+        if (common && rigidPose == null) return new Batch(layer, List.copyOf(corners), light, null);
+        List<Corner> geometry = new ArrayList<>(corners.size());
+        // A mesh spanning several joint transforms still uses its independently posed geometry.
+        for (Corner corner : corners) geometry.add(common ? corner.withoutPose() : corner.baked());
+        return new Batch(layer, List.copyOf(geometry), light, common ? rigidPose : null);
+    }
+
+    record Batch(RenderType layer, List<Corner> corners, int packedLight, @Nullable Transform rigidPose) {
         void submit(PoseStack.Pose pose, VertexConsumer consumer) {
-            submit(pose, consumer, packedLight);
+            submit(pose, consumer, packedLight, rigidPose);
         }
 
         void submitShared(VertexConsumer consumer) {
-            submit(new PoseStack().last(), consumer, 0);
+            submit(new PoseStack().last(), consumer, 0, null);
         }
 
-        private void submit(PoseStack.Pose pose, VertexConsumer consumer, int light) {
+        private void submit(PoseStack.Pose pose, VertexConsumer consumer, int light, @Nullable Transform skin) {
+            Vector3f skinnedPosition = new Vector3f();
+            Vector3f skinnedNormal = new Vector3f();
             for (Corner corner : corners) {
                 Vector4f color = corner.color();
-                consumer.addVertex(pose, corner.position())
+                Vector3f position = corner.position();
+                Vector3f normal = corner.normal();
+                if (skin != null) {
+                    position = skin.apply(skinnedPosition.set(position));
+                    normal = normalize(skin.normal().transform(normal, skinnedNormal));
+                }
+                consumer.addVertex(pose, position)
                         .setColor(color.x, color.y, color.z, color.w)
                         .setUv(corner.uv().x, corner.uv().y)
                         .setOverlay(OverlayTexture.NO_OVERLAY)
                         .setLight(corner.emissive() ? LightCoordsUtil.FULL_BRIGHT : light)
-                        .setNormal(pose, corner.normal());
+                        .setNormal(pose, normal);
             }
         }
     }
 
     private record Surface(Material material, Sprite sprite, RenderType layer, Vector4f color) {}
-    private record Corner(Vector3f position, Vector3f normal, Vector2f uv, Vector4f color, boolean emissive) {}
+    private static Vector3f normalize(Vector3f normal) {
+        return !normal.isFinite() || normal.lengthSquared() == 0f ? normal.set(0f, 1f, 0f) : normal.normalize();
+    }
+
+    private record Corner(Vector3f position, Vector3f normal, Vector2f uv, Vector4f color, boolean emissive,
+                          @Nullable Transform rigidPose) {
+        Corner withoutPose() {
+            return new Corner(position, normal, uv, color, emissive, null);
+        }
+
+        Corner baked() {
+            if (rigidPose == null) return this;
+            return new Corner(rigidPose.apply(new Vector3f(position)),
+                    normalize(rigidPose.normal().transform(new Vector3f(normal))), uv, color, emissive, null);
+        }
+    }
 }

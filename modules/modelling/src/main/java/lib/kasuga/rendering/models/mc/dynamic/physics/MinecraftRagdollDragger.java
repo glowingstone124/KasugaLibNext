@@ -1,5 +1,6 @@
 package lib.kasuga.rendering.models.mc.dynamic.physics;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 import lib.kasuga.rendering.models.uml.dynamic.physics.SkeletonRagdoll;
 import lib.kasuga.rendering.models.uml.dynamic.physics.core.RayHit;
@@ -11,7 +12,6 @@ import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
-import org.lwjgl.glfw.GLFW;
 
 import java.util.Map;
 import java.util.Objects;
@@ -53,23 +53,23 @@ public final class MinecraftRagdollDragger {
     @SubscribeEvent
     public static void onMouseButton(InputEvent.MouseButton.Pre event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.screen != null || minecraft.level == null) return;
-        if (event.getAction() == GLFW.GLFW_RELEASE) {
-            if (active != null && event.getButton() == active.mouseButton) {
+        if (RagdollInput.screenOpen(minecraft) || minecraft.level == null) return;
+        if (event.getAction() == InputConstants.RELEASE) {
+            if (active != null && RagdollInput.matches(active.mouseButton, event.getButton())) {
                 release();
                 event.setCanceled(true);
             }
             return;
         }
-        if (event.getAction() != GLFW.GLFW_PRESS) return;
+        if (event.getAction() != InputConstants.PRESS) return;
 
-        Vec3 origin = minecraft.gameRenderer.getMainCamera().getPosition();
-        Vector3f direction = new Vector3f(minecraft.gameRenderer.getMainCamera().getLookVector());
+        Vec3 origin = RagdollInput.origin(minecraft);
+        Vector3f direction = RagdollInput.direction(minecraft);
         Pick closest = null;
         for (Map.Entry<ModelInstance, MinecraftRagdollConfig.Dragging> entry
                 : REGISTRATIONS.entrySet()) {
             MinecraftRagdollConfig.Dragging settings = entry.getValue();
-            if (!settings.enabled() || settings.mouseButton() != event.getButton()) continue;
+            if (!settings.enabled() || !RagdollInput.matches(settings.mouseButton(), event.getButton())) continue;
             SkeletonRagdoll ragdoll = entry.getKey().getRagdoll();
             if (ragdoll == null || !ragdoll.enabled()) continue;
             RayHit hit = ragdoll.raycastWorld(origin.x, origin.y, origin.z,
@@ -94,14 +94,13 @@ public final class MinecraftRagdollDragger {
     public static void onRenderFrame(RenderFrameEvent.Pre event) {
         if (active == null) return;
         Minecraft minecraft = Minecraft.getInstance();
-        long window = minecraft.getWindow().getWindow();
-        if (minecraft.screen != null || minecraft.level == null || !active.ragdoll.enabled()
-                || GLFW.glfwGetMouseButton(window, active.mouseButton) != GLFW.GLFW_PRESS) {
+        if (RagdollInput.screenOpen(minecraft) || minecraft.level == null || !active.ragdoll.enabled()
+                || !RagdollInput.pressed(minecraft, active.mouseButton)) {
             release();
             return;
         }
-        Vec3 origin = minecraft.gameRenderer.getMainCamera().getPosition();
-        Vector3f direction = new Vector3f(minecraft.gameRenderer.getMainCamera().getLookVector()).normalize();
+        Vec3 origin = RagdollInput.origin(minecraft);
+        Vector3f direction = RagdollInput.direction(minecraft).normalize();
         float deltaSeconds = event.getPartialTick().getRealtimeDeltaTicks() / 20f;
         active.ragdoll.updateDragTargetWorld(
                 origin.x + direction.x * active.distance,

@@ -8,6 +8,7 @@ import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
 import lib.kasuga.core.resource.ResourceSystem;
 import lib.kasuga.core.resource.ScopedResourceManager;
 import lib.kasuga.core.resource.ServerResourceReloadFinishEvent;
+import lib.kasuga.core.resource.pack.OrderedResourcePackGroup;
 import lib.kasuga.core.resource.pack.ScopedPackResources;
 import lib.kasuga.core.resource.routing.ResourceRouting;
 import lib.kasuga.core.resource.source.InputPolicy;
@@ -25,6 +26,8 @@ import net.minecraft.server.packs.FilePackResources;
 import net.minecraft.server.packs.OverlayedPackResources;
 import net.minecraft.server.packs.PackLocationInfo;
 import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.repository.Pack;
+import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.server.packs.repository.PackSource;
 import net.minecraft.server.packs.resources.MultiPackResourceManager;
 import net.minecraft.server.packs.resources.Resource;
@@ -45,6 +48,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.zip.ZipEntry;
@@ -56,6 +60,8 @@ import java.util.zip.ZipOutputStream;
 public final class ResourcePackSmoke {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Identifier FILE = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "pack_smoke/check.txt");
+    private static final Identifier ORDERED = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "pack_smoke/ordered.txt");
+    private static final String GROUP_ID = "pack_smoke_ordered";
     private static final VfsPath ASSET = VfsPath.of("assets/" + FILE.getNamespace() + "/" + FILE.getPath());
     private static final VfsPath DATA = VfsPath.of("data/" + FILE.getNamespace() + "/" + FILE.getPath());
     private final ResourceSystem resources;
@@ -81,6 +87,24 @@ public final class ResourcePackSmoke {
         resources.registerManagedCloseable(low);
         resources.registerManagedCloseable(high);
         resources.getApprovedPacks().register("pack_smoke", List.of(low, high), plan);
+        OrderedResourcePackGroup.Placement placement = new OrderedResourcePackGroup.Placement(Pack.Position.TOP, true);
+        ResourceSource first = orderedSource("z_first", 1, "first");
+        ResourceSource last = orderedSource("a_last", 2, "last");
+        resources.getApprovedPacks().registerOrderedGroup(new OrderedResourcePackGroup(
+                GROUP_ID, Component.literal("Ordered pack smoke"),
+                List.of(new OrderedResourcePackGroup.Layer(GROUP_ID, last, plan),
+                        new OrderedResourcePackGroup.Layer(GROUP_ID, first, plan)),
+                Map.of(PackType.CLIENT_RESOURCES, placement, PackType.SERVER_DATA, placement)));
+    }
+
+    private ResourceSource orderedSource(String name, int rank, String value) throws IOException {
+        InMemoryVfs files = new InMemoryVfs(name);
+        for (String root : List.of("assets", "data")) {
+            files.writeString(VfsPath.of(root + "/" + ORDERED.getNamespace() + "/" + ORDERED.getPath()), value);
+        }
+        ResourceSource source = source(name, rank, files);
+        resources.registerManagedCloseable(source);
+        return source;
     }
 
     private static ResourceSource source(String root, int rank, InMemoryVfs vfs) {
@@ -111,6 +135,8 @@ public final class ResourcePackSmoke {
         if (smoke.clientPublications == 0) checkArchiveLayers();
         String expected = smoke.clientPublications == 0 ? "initial" : "reloaded";
         check(smoke.resources.getServerManager(null), PackType.CLIENT_RESOURCES, expected);
+        Minecraft client = Minecraft.getInstance();
+        checkOrdered(client.getResourcePackRepository(), client.getResourceManager());
         smoke.clientPublications++;
         LOGGER.info("KASUGA_CLIENT_PACK_PASS pass={} value={}", smoke.clientPublications, expected);
     }
@@ -131,6 +157,7 @@ public final class ResourcePackSmoke {
             throw new IllegalStateException("Server resource reload did not publish the replacement manager");
         }
         check(scope, PackType.SERVER_DATA, "reloaded");
+        checkOrdered(server.getPackRepository(), scope.getResourceManager());
         LOGGER.info("KASUGA_SERVER_PACK_PASS initial and reloaded");
     }
 
@@ -156,6 +183,24 @@ public final class ResourcePackSmoke {
             }
         }
         throw new IllegalStateException("Missing scoped " + type + " resource " + path);
+    }
+
+    private static void checkOrdered(PackRepository repository, ResourceManager resources) throws IOException {
+        Pack group = repository.getPack("kasuga/group/" + GROUP_ID);
+        if (group == null || !group.isRequired() || group.getChildren().size() != 2
+                || !group.getChildren().getFirst().getId().endsWith("/z_first")
+                || !group.getChildren().getLast().getId().endsWith("/a_last")
+                || group.getChildren().stream().anyMatch(child -> !child.isHidden())) {
+            throw new IllegalStateException("Ordered resource pack group lost its rank or child placement");
+        }
+        List<String> stack = new ArrayList<>();
+        for (Resource resource : resources.getResourceStack(ORDERED)) {
+            try (InputStream input = resource.open()) { stack.add(read(input)); }
+        }
+        if (!stack.equals(List.of("first", "last"))) {
+            throw new IllegalStateException("Ordered resource group changed its frozen stack: " + stack);
+        }
+        LOGGER.info("KASUGA_ORDERED_PACK_PASS required-parent,hidden-children,frozen-rank");
     }
 
     private static void checkArchiveLayers() throws IOException {

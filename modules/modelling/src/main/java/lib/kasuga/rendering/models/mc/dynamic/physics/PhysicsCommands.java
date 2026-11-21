@@ -53,11 +53,15 @@ public final class PhysicsCommands {
         return Commands.literal("kasuga_ragdoll")
                 .then(Commands.literal("deploy")
                         .then(Commands.argument("model", ResourceLocationArgument.id())
+                                .then(Commands.argument("config", ResourceLocationArgument.id())
+                                        .executes(context -> deploy(context,
+                                                ResourceLocationArgument.getId(context, "model"), "",
+                                                ResourceLocationArgument.getId(context, "config"))))
                                 .executes(context -> deploy(context,
                                         ResourceLocationArgument.getId(context, "model"), "", null)))
                         .executes(context -> {
                             context.getSource().sendFailure(Component.literal(
-                                    "Usage: /kasuga_ragdoll deploy <model>"));
+                                    "Usage: /kasuga_ragdoll deploy <model> [config]"));
                             return 0;
                         }))
                 .then(Commands.literal("list").executes(PhysicsCommands::list))

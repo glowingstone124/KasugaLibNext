@@ -9,9 +9,13 @@ import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.UniformType;
 import lib.kasuga.KasugaLib;
+import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
+import lib.kasuga.rendering.models.uml.backend.DepthBias;
+import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.structure.Model;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.StagedVertexBuffer;
@@ -28,11 +32,13 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterFeatureRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
-import org.joml.Matrix3fc;
+import org.joml.Matrix3f;
+import org.joml.Matrix4f;
 import org.jspecify.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,6 +55,7 @@ public final class RenderPearlModelBatcher implements FeatureRenderer<RenderPear
             RenderPipelines.ENTITY_CUTOUT_CULL, instanced(RenderPipelines.ENTITY_CUTOUT_CULL, "cutout_cull"),
             RenderPipelines.ENTITY_CUTOUT, instanced(RenderPipelines.ENTITY_CUTOUT, "cutout")
     );
+    private static final Map<BiasedPipeline, RenderPipeline> BIASED_PIPELINES = new HashMap<>();
 
     private final List<List<Draw>> groups = new ArrayList<>();
     private static FrameStats lastFrame = new FrameStats(0, 0, 0);
@@ -64,6 +71,11 @@ public final class RenderPearlModelBatcher implements FeatureRenderer<RenderPear
     @SubscribeEvent
     public static void registerPipelines(RegisterRenderPipelinesEvent event) {
         for (RenderPipeline pipeline : PIPELINES.values()) event.registerPipeline(pipeline);
+    }
+
+    @SubscribeEvent
+    public static void onShaderReload(ClientResourceReloadFinishEvent event) {
+        BIASED_PIPELINES.clear();
     }
 
     static boolean supports(RenderType layer) {
@@ -84,18 +96,25 @@ public final class RenderPearlModelBatcher implements FeatureRenderer<RenderPear
         List<Draw> draws = new ArrayList<>();
         groups.add(draws);
         for (int start = 0; start < submits.size();) {
-            RenderType layer = submits.get(start).batch().layer();
+            Submit first = submits.get(start);
+            RenderType layer = first.batch().layer();
+            DepthBias bias = first.depthBias();
             int end = start + 1;
-            while (end < submits.size() && submits.get(end).batch().layer() == layer) end++;
-            prepareLayer(context.stagedVertexBuffer(), layer, submits.subList(start, end), draws);
+            while (end < submits.size() && submits.get(end).batch().layer() == layer
+                    && submits.get(end).depthBias().equals(bias)) end++;
+            prepareLayer(context.stagedVertexBuffer(), layer, bias, submits.subList(start, end), draws);
             start = end;
         }
     }
 
-    private static void prepareLayer(StagedVertexBuffer buffers, RenderType layer, List<Submit> submits,
+    private static void prepareLayer(StagedVertexBuffer buffers, RenderType layer, DepthBias bias, List<Submit> submits,
                                      List<Draw> draws) {
         PreparedRenderType prepared = layer.prepare();
-        RenderPipeline instancePipeline = PIPELINES.get(layer.pipeline());
+        if (bias.enabled()) {
+            prepared = new PreparedRenderType(prepared.name(), depthBiased(prepared.pipeline(), bias),
+                    prepared.oitPipelineSet(), prepared.dynamicTransforms(), prepared.scissorState(), prepared.textures());
+        }
+        RenderPipeline instancePipeline = depthBiased(PIPELINES.get(layer.pipeline()), bias);
 
         int fallbackStart = 0;
         for (int start = 0; start + 1 < submits.size();) {
@@ -117,6 +136,21 @@ public final class RenderPearlModelBatcher implements FeatureRenderer<RenderPear
         prepareFallback(buffers, layer, prepared, submits.subList(fallbackStart, submits.size()), draws);
     }
 
+    private static RenderPipeline depthBiased(RenderPipeline base, DepthBias bias) {
+        if (!bias.enabled()) return base;
+        return BIASED_PIPELINES.computeIfAbsent(new BiasedPipeline(base, bias), key -> {
+            DepthStencilState depth = base.getDepthStencilState();
+            String suffix = Integer.toHexString(Float.floatToIntBits(bias.factor())) + "_"
+                    + Integer.toHexString(Float.floatToIntBits(bias.units()));
+            // Model depth bias uses conventional depth units. RenderPearl uses reverse Z.
+            return base.toBuilder().withLocation(id(base.getLocation().getPath() + "/bias_" + suffix))
+                    .withDepthStencilState(new DepthStencilState(depth.depthTest(), depth.writeDepth(),
+                            depth.depthBiasScaleFactor() - bias.factor(), depth.depthBiasConstant() - bias.units(),
+                            depth.stencilTest()))
+                    .build();
+        });
+    }
+
     private static void prepareFallback(StagedVertexBuffer buffers, RenderType layer, PreparedRenderType prepared,
                                         List<Submit> submits, List<Draw> draws) {
         if (submits.isEmpty()) return;
@@ -133,9 +167,17 @@ public final class RenderPearlModelBatcher implements FeatureRenderer<RenderPear
                 .allocateGpuMapped(INSTANCE_BYTES * MAX_INSTANCES, alignment, GpuBuffer.USAGE_UNIFORM)) {
             ByteBuffer data = mapped.data();
             int offset = 0;
+            Matrix4f placement = new Matrix4f();
+            Matrix3f normal = new Matrix3f();
             for (Submit submit : submits) {
-                submit.pose().pose().get(offset, data);
-                Matrix3fc normal = submit.pose().normal();
+                placement.set(submit.pose().pose());
+                normal.set(submit.pose().normal());
+                Transform rigidPose = submit.batch().rigidPose();
+                if (rigidPose != null) {
+                    placement.mul(rigidPose.transform());
+                    normal.mul(rigidPose.normal());
+                }
+                placement.get(offset, data);
                 writeColumn(data, offset + 64, normal.m00(), normal.m01(), normal.m02());
                 writeColumn(data, offset + 80, normal.m10(), normal.m11(), normal.m12());
                 writeColumn(data, offset + 96, normal.m20(), normal.m21(), normal.m22());
@@ -202,7 +244,8 @@ public final class RenderPearlModelBatcher implements FeatureRenderer<RenderPear
         return Identifier.fromNamespaceAndPath(KasugaLib.MODID, path);
     }
 
-    record Submit(Model model, RenderPearlModelGeometry.Batch batch, PoseStack.Pose pose) implements BatchableSubmit {
+    record Submit(Model model, RenderPearlModelGeometry.Batch batch, PoseStack.Pose pose,
+                  DepthBias depthBias) implements BatchableSubmit {
         @Override public FeatureRendererType<Submit> featureType() { return TYPE; }
         @Override public Object batchKey() { return batch.layer(); }
 
@@ -213,6 +256,8 @@ public final class RenderPearlModelBatcher implements FeatureRenderer<RenderPear
 
     private record Draw(StagedVertexBuffer.Draw geometry, PreparedRenderType layer, RenderPipeline pipeline,
                         @Nullable GpuBufferSlice instances, int count, boolean firstUse) {}
+
+    private record BiasedPipeline(RenderPipeline pipeline, DepthBias depthBias) {}
 
     record FrameStats(int draws, int instancedModels, int geometryVertices) {}
 }

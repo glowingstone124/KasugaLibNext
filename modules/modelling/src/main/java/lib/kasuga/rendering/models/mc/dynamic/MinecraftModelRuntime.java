@@ -38,15 +38,13 @@ public final class MinecraftModelRuntime {
         if (instance.isClosed()) INSTANCES.remove(instance);
         else {
             INSTANCES.put(instance, Boolean.TRUE);
-            ModelParticleRuntime.register(instance);
-            ModelLightRuntime.register(instance);
+            ModelRuntimeEffects.register(instance);
         }
     }
 
     public static synchronized void unregister(ModelInstance instance) {
         INSTANCES.remove(instance);
-        ModelParticleRuntime.unregister(instance);
-        ModelLightRuntime.unregister(instance);
+        ModelRuntimeEffects.unregister(instance);
     }
 
     public static synchronized void register(ModelPhysicsScene scene) {
@@ -222,7 +220,6 @@ public final class MinecraftModelRuntime {
         previousLevel = level;
         MinecraftRagdollDragger.releaseActiveDrag();
         MinecraftRagdollDeployments.removeAll();
-        if (hadLevel || level == null) ModelParticleRuntime.clearWorldState();
-        if (hadLevel || level == null) ModelLightRuntime.clearWorldState();
+        if (hadLevel || level == null) ModelRuntimeEffects.clearWorldState();
     }
 }

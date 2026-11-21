@@ -1,5 +1,6 @@
 package lib.kasuga.core.rendering.mixin;
 
+import lib.kasuga.client.ClientBlockUpdateHooks;
 import lib.kasuga.rendering.output.mc.MinecraftCameras;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -13,6 +14,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientLevel.class)
 abstract class CameraChunkUpdatesMixin {
+    @Inject(method = "sendBlockUpdated", at = @At("TAIL"))
+    private void kasuga$notifyBlockUpdate(BlockPos position, BlockState oldState, BlockState newState,
+                                          int flags, CallbackInfo callback) {
+        ClientBlockUpdateHooks.dispatch((ClientLevel) (Object) this, position.asLong(), oldState, newState);
+    }
+
     @Inject(method = "setBlocksDirty", at = @At("HEAD"))
     private void kasuga$blockChanged(BlockPos position, BlockState oldState, BlockState newState, CallbackInfo callback) {
         if ((Object) this == Minecraft.getInstance().level) MinecraftCameras.markChunkDirty(ChunkPos.containing(position));

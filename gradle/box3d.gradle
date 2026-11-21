@@ -144,15 +144,19 @@ tasks.named('processResources') {
     }
 }
 
-tasks.withType(Test).configureEach {
-    dependsOn tasks.named('buildBox3D')
-    if (box3dCanBuild) {
-        def mappedName = System.mapLibraryName('kasuga_box3d')
-        def library = box3dResourceDirectory.get().file("native/${box3dClassifier}/${mappedName}").asFile
-        jvmArgumentProviders.add({ ["-Dkasuga.box3d.library=${library.absolutePath}"] } as CommandLineArgumentProvider)
-    } else {
-        useJUnitPlatform {
-            excludeTags 'box3d'
-        }
+if (box3dCanBuild) {
+    String mappedName = System.mapLibraryName('kasuga_box3d')
+    String library = box3dResourceDirectory.get().file("native/${box3dClassifier}/${mappedName}").asFile.absolutePath
+    neoForge.runs.configureEach {
+        // The dev launcher loads render-core and the host resources in separate modules.
+        systemProperty 'kasuga.box3d.library', library
+    }
+    tasks.withType(Test).configureEach {
+        dependsOn tasks.named('buildBox3D')
+        jvmArgumentProviders.add({ ["-Dkasuga.box3d.library=${library}"] } as CommandLineArgumentProvider)
+    }
+} else {
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform { excludeTags 'box3d' }
     }
 }

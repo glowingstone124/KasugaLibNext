@@ -60,6 +60,8 @@ Java 25 and NeoForge 26.3.0.109.
 ```
 
 The 26.3 distributable is the `-all.jar` in `modules/multiversion/build/26.3/libs`.
+CI also produces `kasuga-minecraft-26.3-universal.jar` with Box3D for Linux x86-64,
+Windows x86-64, and macOS ARM64.
 It includes the Micronaut startup and injection APIs, VFS, resource pack scopes and
 reload events, and the RenderPearl world model adapter. Mount a `ModelInstance` in the current client
 level, supply its world position and a texture-to-`Identifier` mapping, and update
@@ -89,8 +91,11 @@ The generated `Rpc.wrap` API uses the corresponding NeoForge client and server
 packet distributors on both Minecraft targets. One-way calls and calls with a
 response share the existing RPC codecs and session handling.
 
-Model rendering uses Minecraft entity pipelines on the active graphics backend
-and supports CPU skinning. Point, area, and volumetric lights use RenderPearl
+Model rendering uses Minecraft entity pipelines on the active graphics backend.
+Repeated opaque and cutout geometry uses hardware instancing, with per-instance
+placement, lighting, and rigid bone poses. When evaluated geometry differs
+between instances, it uses the standard submission path, as do translucent
+materials. Point, area, and volumetric lights use RenderPearl
 with the same lighting shader calculations as 1.21.1. Nested world scenes can
 own model and light nodes. Native Blockbench models use their authored Locator
 lights and the same evaluated bone pose as their geometry. See the
@@ -113,6 +118,9 @@ these resource formats, including PMX, PMD, and MMD ZIP archives with diffuse te
 texture aliases. Bedrock uses its first geometry by default.
 `KsgMinecraftJsonLoader.openBedrock` also accepts a geometry name and a texture
 override for files shared by multiple entities.
+Box3D physics blocks and configured ragdolls run with the standard model
+scheduler on both backends. In a client world, use `/kasuga_physics block` or
+`/kasuga_ragdoll deploy <model> <config>`.
 
 Document items register typed components with `DocumentComponentReg`. Their
 first-person renderers submit page geometry and text through

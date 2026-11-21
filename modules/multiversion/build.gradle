@@ -25,6 +25,11 @@ sourceSets.main.java.srcDir(rootProject.file('modules/modelling/src/shared/java'
 sourceSets.main.resources.srcDir(rootProject.file('modules/modelling/src/sharedResources'))
 sourceSets.test.java.srcDir(rootProject.file('modules/core/src/sharedTest/java'))
 
+tasks.withType(Sync).configureEach {
+    // Gradle does not fingerprint the line filters used to adapt shared Java sources.
+    inputs.file(project.buildFile).withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // Sync the shared registration sources with the names used by the 26.3 mappings.
 // Behavioral API changes are handled in the handwritten platform adapters.
 def registrationDirectory = layout.buildDirectory.dir('generated/sources/registration/java')
@@ -44,6 +49,7 @@ def prepareRegistrationSources = tasks.register('prepareRegistrationSources', Sy
                 'lib/kasuga/content/document/**',
                 'lib/kasuga/core/codec/KasugaCodec.java',
                 'lib/kasuga/core/networking/rpc/**',
+                'lib/kasuga/client/ClientBlockUpdateHooks.java',
                 'lib/kasuga/core/rendering/ISpecialRenderingItem.java',
                 'lib/kasuga/content/graph/GraphCycleDetector.java'
         exclude 'lib/kasuga/content/device/GlobalDeviceManager.java',
@@ -109,6 +115,15 @@ def prepareRegistrationTemplates = tasks.register('prepareRegistrationTemplates'
 def prepareModelSources = tasks.register('prepareModelSources', Sync) {
     from(rootProject.file('modules/modelling/src/main/java')) {
         include 'lib/kasuga/rendering/models/mc/dynamic/fsm/**',
+                'lib/kasuga/rendering/models/mc/dynamic/MinecraftModelRuntime.java',
+                'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockPhysics.java',
+                'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRagdollEnvironment.java',
+                'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRigidBody.java',
+                'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftRagdoll*.java',
+                'lib/kasuga/rendering/models/mc/dynamic/physics/PhysicsCommands.java',
+                'lib/kasuga/rendering/models/mc/dynamic/physics/PhysicsLightSampler.java',
+                'lib/kasuga/rendering/models/mc/dynamic/physics/RagdollDeployment.java',
+                'lib/kasuga/rendering/models/mc/typo/gltf_entry/GltfModelManifest.java',
                 'lib/kasuga/rendering/models/mc/scene/BlueprintImporters.java',
                 'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipHelper.java',
                 'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipResource.java',
@@ -155,6 +170,19 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
         updateMinecraftNames(line).replace('new ChunkPos(pos)', 'ChunkPos.containing(pos)')
                 .replace('context.camera().getPosition()', 'context.camera().pos')
                 .replace('context.partialTick().getGameTimeDeltaPartialTick(false)', 'context.partialTick()')
+                .replace('ResourceLocationArgument', 'IdentifierArgument')
+                .replace('level.getMinBuildHeight()', 'level.getMinY()')
+    }
+    filesMatching('**/PhysicsLightSampler.java') {
+        filter { String line ->
+            if (line == 'import net.minecraft.client.renderer.LightTexture;') return null
+            line.replace('import net.minecraft.client.renderer.LevelRenderer;', 'import net.minecraft.util.LightCoordsUtil;')
+                    .replace('LevelRenderer.getLightColor(', 'LightCoordsUtil.getLightCoords(')
+                    .replace('LightTexture.pack(', 'LightCoordsUtil.pack(')
+                    .replaceAll(/\.isSolidRender\(level, \w+\)/, '.isSolidRender()')
+                    .replace('level.getSkyDarken(1f)',
+                            'level.environmentAttributes().getValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_FACTOR, center, null)')
+        }
     }
     into(layout.buildDirectory.dir('generated/sources/models/java'))
 }

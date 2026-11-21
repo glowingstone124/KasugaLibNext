@@ -1,0 +1,13 @@
+{
+  "simulation": {
+    "hertz": 60,
+    "update_mode": "render_frame",
+    "gravity": [0, -3, 0]
+  },
+  "environment": {
+    "enabled": true
+  },
+  "bodies": [
+    {"rigid_body": 0, "role": "pelvis"}
+  ]
+}

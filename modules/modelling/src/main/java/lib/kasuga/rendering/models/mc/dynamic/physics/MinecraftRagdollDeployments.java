@@ -1,8 +1,6 @@
 package lib.kasuga.rendering.models.mc.dynamic.physics;
 
-import lib.kasuga.rendering.models.mc.registry.PipelineRegistry;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
-import lib.kasuga.rendering.models.uml.dynamic.ModelPipeLine;
 import lib.kasuga.rendering.models.uml.dynamic.physics.SkeletonRagdoll;
 import lib.kasuga.rendering.models.uml.dynamic.physics.ModelPhysicsScene;
 import lib.kasuga.rendering.models.uml.dynamic.physics.box3d.NativeBox3D;
@@ -28,13 +26,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /** Client runtime API for deploying and removing configured PMX or glTF ragdolls. */
 @EventBusSubscriber(value = Dist.CLIENT)
 public final class MinecraftRagdollDeployments {
-    private static final String BRIDGE = "mc_bridge";
-    private static final String BACKEND = "mc_backend";
     private static final Map<ResourceLocation, DeploymentHandle> DEPLOYMENTS =
             new HashMap<>();
     /** Guarded by the class monitor; lets the frame loop exit early. */
@@ -82,56 +79,38 @@ public final class MinecraftRagdollDeployments {
             previous.remove();
         }
 
-        ModelPipeLine<ResourceLocation, ResourceLocation> pipeline =
-                PipelineRegistry.resolve(request.modelResource);
-        if (pipeline == null) return Optional.empty();
-        ResourceLocation resolvedModel = request.modelResource;
-        if (pipeline == PipelineRegistry.pmx()) {
-            var loader = PipelineRegistry.pmxLoader();
-            if (loader == null) return Optional.empty();
-            resolvedModel = loader.getLocByFileAndName(request.modelResource, request.modelName);
-        }
-        if (resolvedModel == null || !pipeline.hasModel(resolvedModel)) return Optional.empty();
-
-        ResourceLocation configResource = request.configResource;
-        if (configResource == null && pipeline == PipelineRegistry.gltf()) {
-            var loader = PipelineRegistry.gltfLoader();
-            configResource = loader == null ? null : loader.manifest(resolvedModel)
-                    .map(manifest -> manifest.ragdollConfig()).orElse(null);
-        }
-        if (configResource == null) {
-            throw new IOException("Model manifest does not declare a ragdoll config: " + resolvedModel);
-        }
-        MinecraftRagdollConfig config = MinecraftRagdollConfig.load(resourceManager, configResource);
-        if (pipeline.hasInstance(resolvedModel, request.instanceId)) {
-            throw new IllegalStateException("pipeline instance id is already in use: " + request.instanceId);
-        }
-        ModelInstance instance = pipeline.createInstance(
-                resolvedModel, request.instanceId, null, null, null);
-        if (instance == null) return Optional.empty();
-
+        ModelLease model = RagdollModelPlatform.open(request, resourceManager, levelSupplier);
+        if (model == null) return Optional.empty();
+        ModelInstance instance = model.instance();
         try {
+            MinecraftRagdollConfig config = MinecraftRagdollConfig.load(resourceManager, model.configResource());
             instance.getSkeletonInstance().enableFloatingOrigin(request.worldOrigin);
             instance.getSkeletonInstance().transformRoot(request.localRootTransform());
             SkeletonRagdoll ragdoll = scene == null
                     ? config.attach(instance, levelSupplier, request.applyInitialState)
                     : config.attach(instance, scene, levelSupplier, request.applyInitialState);
             if (ragdoll == null) {
-                pipeline.removeInstance(resolvedModel, request.instanceId);
+                model.release().run();
                 return Optional.empty();
             }
-            pipeline.addToRenderer(resolvedModel, request.instanceId, BRIDGE, BACKEND);
-            DeploymentHandle handle = new DeploymentHandle(request, resolvedModel, configResource,
-                    pipeline, instance, ragdoll);
+            model.mount().run();
+            DeploymentHandle handle = new DeploymentHandle(request, model, ragdoll);
             DEPLOYMENTS.put(request.instanceId, handle);
             return Optional.of(handle);
-        } catch (RuntimeException exception) {
-            MinecraftRagdollRuntime.unregister(instance);
-            MinecraftRagdollDragger.unregister(instance);
-            pipeline.removeInstance(resolvedModel, request.instanceId);
-            throw exception;
+        } catch (IOException | RuntimeException | Error failure) {
+            try {
+                MinecraftRagdollRuntime.unregister(instance);
+                MinecraftRagdollDragger.unregister(instance);
+                model.release().run();
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
         }
     }
+
+    record ModelLease(ResourceLocation configResource, ModelInstance instance, Runnable mount,
+                      BooleanSupplier owned, Runnable release) {}
 
     public static synchronized Optional<RagdollDeployment> get(ResourceLocation instanceId) {
         DeploymentHandle handle = DEPLOYMENTS.get(Objects.requireNonNull(instanceId, "instanceId"));
@@ -255,30 +234,23 @@ public final class MinecraftRagdollDeployments {
 
     private static final class DeploymentHandle implements RagdollDeployment {
         private final Request request;
-        private final ResourceLocation resolvedModel;
-        private final ResourceLocation resolvedConfig;
-        private final ModelPipeLine<ResourceLocation, ResourceLocation> pipeline;
+        private final ModelLease model;
         private final ModelInstance instance;
         private final SkeletonRagdoll ragdoll;
         private Entity anchoredEntity;
         private SkeletonRagdoll.Body anchoredBody;
 
-        private DeploymentHandle(Request request, ResourceLocation resolvedModel,
-                                 ResourceLocation resolvedConfig,
-                                 ModelPipeLine<ResourceLocation, ResourceLocation> pipeline,
-                                 ModelInstance instance, SkeletonRagdoll ragdoll) {
+        private DeploymentHandle(Request request, ModelLease model, SkeletonRagdoll ragdoll) {
             this.request = request;
-            this.resolvedModel = resolvedModel;
-            this.resolvedConfig = resolvedConfig;
-            this.pipeline = pipeline;
-            this.instance = instance;
+            this.model = model;
+            this.instance = model.instance();
             this.ragdoll = ragdoll;
         }
 
         @Override public ResourceLocation instanceId() { return request.instanceId; }
         @Override public ResourceLocation modelResource() { return request.modelResource; }
         @Override public String modelName() { return request.modelName; }
-        @Override public ResourceLocation configResource() { return resolvedConfig; }
+        @Override public ResourceLocation configResource() { return model.configResource(); }
         @Override public ModelInstance instance() { return instance; }
         @Override public SkeletonRagdoll ragdoll() { return ragdoll; }
         @Override public Entity anchoredEntity() { return anchoredEntity; }
@@ -357,7 +329,7 @@ public final class MinecraftRagdollDeployments {
         public boolean active() {
             synchronized (MinecraftRagdollDeployments.class) {
                 return DEPLOYMENTS.get(request.instanceId) == this
-                        && pipeline.getInstance(resolvedModel, request.instanceId) == instance;
+                        && model.owned().getAsBoolean();
             }
         }
 
@@ -372,9 +344,7 @@ public final class MinecraftRagdollDeployments {
                 }
                 MinecraftRagdollRuntime.unregister(instance);
                 MinecraftRagdollDragger.unregister(instance);
-                if (!pipeline.removeInstance(resolvedModel, request.instanceId)) {
-                    instance.close();
-                }
+                model.release().run();
                 return true;
             }
         }

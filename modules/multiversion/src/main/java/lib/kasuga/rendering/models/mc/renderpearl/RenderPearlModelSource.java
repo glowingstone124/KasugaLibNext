@@ -169,6 +169,11 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
         return mount;
     }
 
+    /** Mounts at an exact world position for a skeleton using a floating origin. */
+    public RenderPearlWorldModels.Mount mount(ClientLevel level, double x, double y, double z) {
+        return RenderPearlWorldModels.mount(level, model, new Vec3(x, y, z), textures);
+    }
+
     @Override protected Snapshot contentSnapshot(LayerLayout layout, float partialTick) {
         if (model.isClosed() || !layout.includes(0)) return null;
         return new Snapshot(bounds, List.of(new Part("model", 0, bounds, context -> {

@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
+import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.structure.Model;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfLoader;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfModelConverter;
@@ -32,6 +33,7 @@ import java.util.List;
 public final class ModelInstancingSmoke {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final Identifier MODEL = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "models/smoke/triangle.gltf");
+    private static final Identifier MASK = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "models/smoke/triangle_mask.gltf");
     private static final Identifier WHITE = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "smoke/instancing_white");
     private static final int COUNT = 64;
 
@@ -40,7 +42,9 @@ public final class ModelInstancingSmoke {
     private static boolean started;
     private static boolean capturing;
     private static boolean finished;
+    private static boolean cutout;
     private static int frames;
+    private static int opaquePixels;
     private static Sample reference;
 
     private ModelInstancingSmoke() {}
@@ -51,16 +55,17 @@ public final class ModelInstancingSmoke {
 
     static void afterFrame(Minecraft client) throws IOException {
         if (!started) {
-            NativeImage image = new NativeImage(1, 1, false);
-            image.setPixel(0, 0, 0xffffffff);
+            NativeImage image = new NativeImage(cutout ? 2 : 1, 1, false);
+            image.setPixel(0, 0, cutout ? 0xffffff : 0xffffffff);
+            if (cutout) image.setPixel(1, 0, 0xffffffff);
             client.getTextureManager().register(WHITE, new DynamicTexture(WHITE::toString, image));
             Model first = load(client);
             Model second = load(client);
             direct = new ArrayList<>(COUNT);
             instanced = new ArrayList<>(COUNT);
             for (int i = 0; i < COUNT; i++) {
-                direct.add(create(i % 2 == 0 ? first : second));
-                instanced.add(create(first));
+                direct.add(create(i % 2 == 0 ? first : second, i));
+                instanced.add(create(first, i));
             }
             started = true;
         }
@@ -72,8 +77,9 @@ public final class ModelInstancingSmoke {
             Sample sample;
             try (image) {
                 sample = sample(image);
-                image.writeToFile(client.gameDirectory.toPath().resolve(directFrame
-                        ? "kasuga-model-batching-direct.png" : "kasuga-model-batching-instanced.png"));
+                String material = cutout ? "mask" : "opaque";
+                String path = directFrame ? "direct" : "instanced";
+                image.writeToFile(client.gameDirectory.toPath().resolve("kasuga-model-batching-" + material + "-" + path + ".png"));
             } catch (IOException failure) {
                 throw new IllegalStateException("Could not save the model batching frame", failure);
             }
@@ -93,12 +99,24 @@ public final class ModelInstancingSmoke {
                     throw new IllegalStateException("Instanced frame differs from direct: " + sample + " vs "
                             + reference + " " + stats);
                 }
-                LOGGER.info("KASUGA_MODEL_INSTANCING_PASS models={} draws={} geometryVertices={} pixels={}",
-                        stats.instancedModels(), stats.draws(), stats.geometryVertices(), sample.pixels());
+                if (cutout && sample.pixels() >= opaquePixels * .8) {
+                    throw new IllegalStateException("Alpha cutout did not discard masked pixels");
+                }
+                LOGGER.info("KASUGA_MODEL_INSTANCING_PASS material={} models={} draws={} geometryVertices={} pixels={}",
+                        cutout ? "MASK" : "OPAQUE", stats.instancedModels(), stats.draws(), stats.geometryVertices(), sample.pixels());
                 for (ModelInstance model : instanced) model.close();
                 for (ModelInstance model : direct) model.close();
                 client.getTextureManager().release(WHITE);
-                finished = true;
+                if (cutout) {
+                    finished = true;
+                } else {
+                    opaquePixels = sample.pixels();
+                    cutout = true;
+                    started = false;
+                    capturing = false;
+                    frames = 0;
+                    reference = null;
+                }
             });
         });
     }
@@ -120,13 +138,15 @@ public final class ModelInstancingSmoke {
     }
 
     private static Model load(Minecraft client) throws IOException {
-        try (InputStream input = client.getResourceManager().open(MODEL)) {
+        try (InputStream input = client.getResourceManager().open(cutout ? MASK : MODEL)) {
             return GltfModelConverter.convert(GltfLoader.load(input));
         }
     }
 
-    private static ModelInstance create(Model model) {
-        return new ModelInstance(model, null, null, null, null, null);
+    private static ModelInstance create(Model model, int index) {
+        ModelInstance instance = new ModelInstance(model, null, null, null, null, null);
+        instance.getSkeletonInstance().transformRoot(new Transform().translate((index % 3 - 1) * .1f, 0, 0));
+        return instance;
     }
 
     private static Sample sample(NativeImage image) {

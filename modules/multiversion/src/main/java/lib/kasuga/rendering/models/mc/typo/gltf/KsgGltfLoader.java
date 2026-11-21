@@ -2,6 +2,7 @@ package lib.kasuga.rendering.models.mc.typo.gltf;
 
 import lib.kasuga.rendering.models.mc.renderpearl.RenderPearlModelSource;
 import lib.kasuga.rendering.models.mc.typo.ModelResourcePaths;
+import lib.kasuga.rendering.models.mc.typo.gltf_entry.GltfModelManifest;
 import lib.kasuga.rendering.models.uml.structure.Model;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfLoader;
 import lib.kasuga.rendering.models.uml.typo.gltf.GltfModelConverter;
@@ -18,11 +19,15 @@ public final class KsgGltfLoader {
     private KsgGltfLoader() {}
 
     public static RenderPearlModelSource open(Identifier identifier) throws IOException {
-        ResourceManager resources = Minecraft.getInstance().getResourceManager();
+        return open(Minecraft.getInstance().getResourceManager(), identifier);
+    }
+
+    public static RenderPearlModelSource open(ResourceManager resources, Identifier identifier) throws IOException {
         Model model;
+        GltfModelManifest manifest = GltfModelManifest.load(resources, identifier);
         try (InputStream input = resources.open(identifier)) {
-            model = GltfModelConverter.convert(GltfLoader.loadAllAnimations(input,
-                    reference -> readReference(resources, identifier, reference)));
+            model = GltfModelConverter.convertWithScale(GltfLoader.loadAllAnimations(input,
+                    reference -> readReference(resources, identifier, reference)), manifest.modelScale());
         }
         return RenderPearlModelSource.open(model, texture -> null,
                 texture -> ((GltfModelData.GltfTextureData) texture.getData()).image());

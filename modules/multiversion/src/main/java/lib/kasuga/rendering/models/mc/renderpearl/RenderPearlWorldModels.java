@@ -8,7 +8,9 @@ import lib.kasuga.rendering.models.mc.component.ModelComponents;
 import lib.kasuga.rendering.models.mc.component.ModelComponentsHolder;
 import lib.kasuga.rendering.models.mc.component.ModelLightPlacement;
 import lib.kasuga.rendering.models.mc.scene.MinecraftModelSource;
+import lib.kasuga.rendering.models.uml.backend.DepthBias;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
+import lib.kasuga.rendering.models.uml.structure.Model;
 import lib.kasuga.rendering.models.uml.structure.material.Texture;
 import lib.kasuga.rendering.models.uml.util.MeshMode;
 import net.minecraft.client.Minecraft;
@@ -96,10 +98,12 @@ public final class RenderPearlWorldModels {
             PoseStack pose = new PoseStack();
             pose.mulPose(cameraRelative);
             MinecraftModelSource.Context context = new MinecraftModelSource.Context(pose, event, partialTick, packedLight);
+            Model geometry = model.getModel();
+            DepthBias depthBias = model.getDepthBias();
             for (RenderPearlModelGeometry.Batch batch : batches) {
                 if (RenderPearlModelBatcher.supports(batch.layer())) {
                     context.submit((stack, collector) -> collector.submitSpecial(RenderPhaseKeys.SOLID,
-                            new RenderPearlModelBatcher.Submit(model.getModel(), batch, stack.last().copy())));
+                            new RenderPearlModelBatcher.Submit(geometry, batch, stack.last().copy(), depthBias)));
                 } else {
                     context.submit(batch.layer(), batch::submit);
                 }
