@@ -11,6 +11,7 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.minecraft.world.level.material.PushReaction;
@@ -34,7 +35,7 @@ public final class SceneGround extends Block {
     static synchronized void register() {
         if (registration != null) return;
         registration = BlockReg.of("scene_ground", SceneGround::new)
-                .mapColor(net.minecraft.world.level.material.MapColor.NONE)
+                .withProperty(BlockBehaviour.Properties.class, properties -> properties.mapColor(MapColor.NONE))
                 .noOcclusion().noLootTable().sound(SoundType.SAND)
                 .pushReaction(PushReaction.BLOCK)
                 .isSuffocating((state, level, pos) -> false)
