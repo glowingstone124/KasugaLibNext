@@ -1,0 +1,158 @@
+// Box3D is C17 and linked statically into a small JNI bridge. Package it at
+// native/<os>-<arch>/, the path used by the shared Java loader.
+def box3dOs = {
+    def value = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+    if (value.contains('win')) return 'windows'
+    if (value.contains('mac') || value.contains('darwin')) return 'macos'
+    if (value.contains('linux')) return 'linux'
+    return value.replaceAll('[^a-z0-9_-]', '_')
+}.call()
+def box3dArch = {
+    def value = System.getProperty('os.arch').toLowerCase(Locale.ROOT)
+    if (value == 'amd64' || value == 'x86_64') return 'x86_64'
+    if (value == 'aarch64' || value == 'arm64') return 'aarch64'
+    return value.replaceAll('[^a-z0-9_-]', '_')
+}.call()
+def box3dClassifier = "${box3dOs}-${box3dArch}"
+def box3dSourceDirectory = rootProject.layout.projectDirectory.dir('modules/modelling/src/main/native')
+def box3dBuildDirectory = layout.buildDirectory.dir('native/box3d')
+def box3dResourceDirectory = box3dBuildDirectory.map { it.dir('resources') }
+def box3dResourceOverlay = providers.gradleProperty('kasugaBox3DNativeResources')
+def box3dCmakeExecutable = {
+    def path = System.getenv('PATH')
+    if (path == null || path.isBlank()) return null
+    def suffixes = box3dOs == 'windows' ? ['.exe', '.cmd', '.bat', ''] : ['']
+    return path.split(java.util.regex.Pattern.quote(File.pathSeparator)).findResult { directory ->
+        suffixes.collect { suffix -> new File(directory, "cmake${suffix}") }
+                .find { candidate -> candidate.isFile() && (box3dOs == 'windows' || candidate.canExecute()) }
+                ?.absolutePath
+    }
+}.call()
+def box3dCanBuild = box3dCmakeExecutable != null
+def box3dJavaHome = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(21)
+}.map { it.metadata.installationPath.asFile.absolutePath.replace('\\', '/') }
+
+if (!box3dCanBuild) {
+    logger.warn('CMake was not found on PATH. Box3D native support and its tests will be omitted; Java-only modelling features will still be built.')
+}
+
+def verifyBox3DUpstream = tasks.register('verifyBox3DUpstream') {
+    description = 'Verifies that vendored Box3D files exactly match the pinned upstream source manifest.'
+    group = 'verification'
+    def vendorDirectory = box3dSourceDirectory.dir('box3d')
+    def manifestFile = box3dSourceDirectory.file('BOX3D_SOURCES.json')
+    def versionFile = box3dSourceDirectory.file('BOX3D_VERSION')
+    inputs.dir(vendorDirectory)
+    inputs.file(manifestFile)
+    inputs.file(versionFile)
+    doLast {
+        def manifest = new groovy.json.JsonSlurper().parse(manifestFile.asFile)
+        def version = new Properties()
+        versionFile.asFile.withInputStream { version.load(it) }
+        if (manifest.commit != version.getProperty('commit')
+                || manifest.repository != version.getProperty('repository')) {
+            throw new GradleException('Box3D source manifest does not match BOX3D_VERSION.')
+        }
+        def root = vendorDirectory.asFile.toPath()
+        def actual = new TreeMap<String, String>()
+        java.nio.file.Files.walk(root).withCloseable { paths ->
+            paths.filter { !java.nio.file.Files.isDirectory(it, java.nio.file.LinkOption.NOFOLLOW_LINKS) }
+                    .forEach { path ->
+                        if (java.nio.file.Files.isSymbolicLink(path)) {
+                            throw new GradleException("Box3D vendor must contain upstream files, not symlinks: ${path}")
+                        }
+                        def relative = root.relativize(path).toString().replace('\\', '/')
+                        actual[relative] = java.security.MessageDigest.getInstance('SHA-256')
+                                .digest(java.nio.file.Files.readAllBytes(path)).encodeHex().toString()
+                    }
+        }
+        def expected = manifest.sha256
+        def missing = expected.keySet() - actual.keySet()
+        def extra = actual.keySet() - expected.keySet()
+        def changed = expected.keySet().intersect(actual.keySet()).findAll { actual[it] != expected[it] }
+        if (missing || extra || changed) {
+            throw new GradleException("Box3D vendor differs from upstream ${manifest.commit}: "
+                    + "missing=${missing}, extra=${extra}, changed=${changed}. "
+                    + 'Keep upstream immutable; implement adaptations outside the box3d directory.')
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn verifyBox3DUpstream
+}
+
+tasks.register('configureBox3D', Exec) {
+    description = 'Configures the vendored Box3D JNI library for the current platform.'
+    group = 'build'
+    dependsOn verifyBox3DUpstream
+    onlyIf('CMake is available') { box3dCanBuild }
+    inputs.files(fileTree(box3dSourceDirectory) {
+        include '**/*.c', '**/*.h', '**/*.inl', '**/*.in', '**/CMakeLists.txt', 'BOX3D_VERSION'
+    })
+    outputs.file(box3dBuildDirectory.map { it.file('CMakeCache.txt') })
+    doFirst {
+        commandLine box3dCmakeExecutable,
+                '-S', box3dSourceDirectory.asFile.absolutePath,
+                '-B', box3dBuildDirectory.get().asFile.absolutePath,
+                '-DCMAKE_BUILD_TYPE=Release',
+                "-DKASUGA_NATIVE_CLASSIFIER=${box3dClassifier}",
+                "-DJAVA_HOME=${box3dJavaHome.get()}"
+    }
+}
+
+tasks.register('buildBox3D', Exec) {
+    description = 'Builds the Box3D JNI library for the current platform.'
+    group = 'build'
+    dependsOn tasks.named('configureBox3D')
+    onlyIf('CMake is available') { box3dCanBuild }
+    inputs.files(fileTree(box3dSourceDirectory) {
+        include '**/*.c', '**/*.h', '**/*.inl', '**/*.in', '**/CMakeLists.txt', 'BOX3D_VERSION'
+    })
+    outputs.dir(box3dResourceDirectory)
+    doFirst {
+        // CMake writes the JNI library to a path relative to the build directory
+        // (resources/native/<classifier>/), and that directory is only created as a
+        // configure-time side effect of file(MAKE_DIRECTORY). When Gradle treats
+        // configureBox3D as up-to-date (cached CMakeCache.txt) that side effect never
+        // runs, so guarantee the output directory exists here before the linker runs.
+        def outputDir = box3dResourceDirectory.get().file("native/${box3dClassifier}").asFile
+        outputDir.mkdirs()
+        commandLine box3dCmakeExecutable, '--build', box3dBuildDirectory.get().asFile.absolutePath,
+                '--config', 'Release', '--target', 'kasuga_box3d'
+    }
+}
+
+tasks.named('processResources') {
+    dependsOn tasks.named('buildBox3D')
+    if (box3dCanBuild) {
+        from(box3dResourceDirectory)
+    }
+    if (box3dResourceOverlay.isPresent()) {
+        from(file(box3dResourceOverlay.get()))
+    }
+    from(rootProject.file('modules/modelling/THIRD_PARTY_NOTICES.md')) {
+        into 'META-INF'
+    }
+    from(box3dSourceDirectory.file('box3d/LICENSE')) {
+        into 'META-INF/licenses'
+        rename { 'box3d-LICENSE.txt' }
+    }
+    from(project(':modules:render-core').file('libs/caliko-LICENSE.txt')) {
+        into 'META-INF/licenses'
+    }
+}
+
+tasks.withType(Test).configureEach {
+    dependsOn tasks.named('buildBox3D')
+    if (box3dCanBuild) {
+        def mappedName = System.mapLibraryName('kasuga_box3d')
+        def library = box3dResourceDirectory.get().file("native/${box3dClassifier}/${mappedName}").asFile
+        jvmArgumentProviders.add({ ["-Dkasuga.box3d.library=${library.absolutePath}"] } as CommandLineArgumentProvider)
+    } else {
+        useJUnitPlatform {
+            excludeTags 'box3d'
+        }
+    }
+}

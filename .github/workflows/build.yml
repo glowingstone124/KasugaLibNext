@@ -84,6 +84,78 @@ jobs:
           path: modules/modelling/build/libs/kasuga-modelling-*.jar
           if-no-files-found: error
 
+  build-26-3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Java 21 toolchain
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+      - name: Setup Java 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-strict-match: false
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+      - name: Build and test Minecraft 26.3
+        run: ./gradlew -PkasugaMinecraft=26.3 build renderingReleaseCheck :external:slp:javet:shadowJar --console=plain
+      - name: Upload Minecraft 26.3 base mod
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasuga-26-3-base
+          path: modules/multiversion/build/26.3/libs/kasuga-multiversion-*-all.jar
+          if-no-files-found: error
+      - name: Upload Minecraft 26.3 adapters
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasuga-26-3-adapters
+          path: |
+            external/slp/javet/build/26.3/libs/kasuga-javet-*-all.jar
+            external/uip/ldlib/build/26.3/libs/kasuga-ldlib-*.jar
+            external/uip/ldlib-compose/build/26.3/libs/kasuga-ldlib-compose-*.jar
+          if-no-files-found: error
+
+  package-26-3-universal:
+    needs: [build, build-26-3]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: temurin
+      - uses: actions/download-artifact@v4
+        with:
+          name: kasuga-26-3-base
+          path: build/kasuga-26-3
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: box3d-native-*
+          path: build/box3d-universal/native
+          merge-multiple: true
+      - name: Bundle and verify Box3D native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          jars=(build/kasuga-26-3/kasuga-multiversion-*-all.jar)
+          test "${#jars[@]}" -eq 1
+          jar uf "${jars[0]}" -C build/box3d-universal native
+          mv "${jars[0]}" build/kasuga-minecraft-26.3-universal.jar
+          entries=$(jar tf build/kasuga-minecraft-26.3-universal.jar)
+          grep -qE '^native/linux-[^/]+/libkasuga_box3d\.so$' <<< "$entries"
+          grep -qE '^native/windows-[^/]+/kasuga_box3d\.dll$' <<< "$entries"
+          grep -qE '^native/macos-[^/]+/libkasuga_box3d\.dylib$' <<< "$entries"
+      - name: Upload universal Minecraft 26.3 mod
+        uses: actions/upload-artifact@v4
+        with:
+          name: kasuga-minecraft-26.3-universal
+          path: build/kasuga-minecraft-26.3-universal.jar
+          if-no-files-found: error
+
   # Package a single jar containing the box3d native libraries for all
   # platforms without re-running the Gradle/NeoForge pipeline.
   package-universal:

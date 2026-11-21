@@ -12,7 +12,16 @@ repositories {
     mavenCentral()
 }
 
-neoForge.version = project.neo_version_26_3
+neoForge {
+    version = project.neo_version_26_3
+    mods {
+        kasuga_lib_javet { sourceSet sourceSets.main }
+    }
+    unitTest {
+        enable()
+        testedMod = mods.kasuga_lib_javet
+    }
+}
 
 // This target packages the V8 libraries with the mod so startup needs no downloader.
 Map<String, String> minecraftNames = [
@@ -43,6 +52,7 @@ sourceSets.main.resources.exclude('scripts/**', '**/fsmscriptinggametest.empty.n
 
 configurations {
     bundledEngine
+    testRuntimeOnly.extendsFrom(bundledEngine)
 }
 
 dependencies {
@@ -52,10 +62,23 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
 
     implementation 'com.caoccao.javet:javet:5.0.1'
+    testCompileOnly project(':modules:multiversion')
+    testRuntimeOnly(project(':modules:multiversion')) {
+        transitive = false
+        attributes {
+            attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling, Bundling.SHADOWED))
+        }
+    }
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     bundledEngine('com.caoccao.javet:javet:5.0.1') { transitive = false }
     for (String platform : ['windows-x86_64', 'linux-x86_64', 'linux-arm64', 'macos-x86_64', 'macos-arm64']) {
         bundledEngine("com.caoccao.javet:javet-v8-${platform}:5.0.1") { transitive = false }
     }
+}
+
+test {
+    useJUnitPlatform()
 }
 
 def generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {

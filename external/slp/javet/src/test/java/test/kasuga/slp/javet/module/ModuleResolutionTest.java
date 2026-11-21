@@ -86,7 +86,8 @@ public class ModuleResolutionTest {
     }
 
     private ResolvedPackage loadTestPackage() throws URISyntaxException {
-        Path packPath = Path.of(getClass().getResource("/packs/js_pack").toURI());
+        Path packPath = Path.of(getClass().getResource("/packs/js_pack/scripts/package.toml").toURI())
+                .getParent().getParent();
         PackageInfo info = new PackageInfo(
             "@test/js-pack", "javascript", null, "1.0.0", "index",
             List.of(),

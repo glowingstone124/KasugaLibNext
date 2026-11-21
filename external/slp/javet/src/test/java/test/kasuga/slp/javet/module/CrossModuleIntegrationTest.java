@@ -110,7 +110,8 @@ public class CrossModuleIntegrationTest {
 
     private ResolvedPackage registerPackage(String name, String version, String main,
                                              String packName, String resourcePath) throws URISyntaxException {
-        Path packPath = Path.of(getClass().getResource(resourcePath).toURI());
+        Path packPath = Path.of(getClass().getResource(resourcePath + "/scripts/package.toml").toURI())
+                .getParent().getParent();
         PackageInfo info = new PackageInfo(
             name, "javascript", null, version, main,
             List.of(),
@@ -266,7 +267,8 @@ public class CrossModuleIntegrationTest {
         registerPackage("@test/math", "2.1.0", "index", "math_pack", "/packs/math_pack");
 
         // The js_pack has index.js that requires "./utils"
-        Path packPath = Path.of(getClass().getResource("/packs/js_pack").toURI());
+        Path packPath = Path.of(getClass().getResource("/packs/js_pack/scripts/package.toml").toURI())
+                .getParent().getParent();
         PackageInfo jsInfo = new PackageInfo(
             "@test/js-pack", "javascript", null, "1.0.0", "index",
             List.of(),

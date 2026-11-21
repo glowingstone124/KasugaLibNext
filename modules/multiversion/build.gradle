@@ -62,11 +62,42 @@ def prepareRegistrationSources = tasks.register('prepareRegistrationSources', Sy
     }
     from(rootProject.file('modules/data-driven/src/main/java')) {
         exclude 'lib/kasuga/registration/data_driven/builder/RegistrationResources.java',
-                'lib/kasuga/registration/data_driven/diagnostics/DiagnosticPermissions.java'
+                'lib/kasuga/registration/data_driven/diagnostics/DiagnosticPermissions.java',
+                'lib/kasuga/registration/data_driven/source/ModJarContentSource.java'
     }
     filter(updateMinecraftNames)
     into(registrationDirectory)
 }
+def prepareDataDrivenTests = tasks.register('prepareDataDrivenTests', Sync) {
+    from(rootProject.file('modules/data-driven/src/test/java')) {
+        // The 1.21.1 command, block state and contentTesting fixtures have a separate host.
+        exclude '**/DataDiagnosticsCommandsTest.java', '**/BlockStateRegistrationTest.java',
+                '**/StatePropertyApiTest.java', '**/FactoryRegistryTest.java',
+                '**/JsonTreeBuilderIndexPathTest.java', '**/ModJarContentSourceTest.java'
+    }
+    filter(updateMinecraftNames)
+    into(layout.buildDirectory.dir('generated/sources/dataDriven/test'))
+}
+sourceSets.test.java.srcDir(prepareDataDrivenTests)
+def prepareBox3DTests = tasks.register('prepareBox3DTests', Sync) {
+    from(rootProject.file('modules/modelling/src/test/java')) {
+        include '**/physics/box3d/NativeBox3DTest.java', '**/physics/core/Box3DCollisionIntegrationTest.java'
+    }
+    into(layout.buildDirectory.dir('generated/sources/box3d/test'))
+}
+// Run portable physics tests outside the NeoForge module layer so their package-private
+// fixtures share the render-core JVM package.
+def box3dTest = sourceSets.create('box3dTest')
+box3dTest.java.srcDir(prepareBox3DTests)
+tasks.register('box3dTest', Test) {
+    group = 'verification'
+    description = 'Runs the portable Box3D JNI and collision integration tests.'
+    testClassesDirs = box3dTest.output.classesDirs
+    classpath = box3dTest.runtimeClasspath
+    useJUnitPlatform()
+}
+tasks.named('check') { dependsOn 'box3dTest' }
+
 def prepareRegistrationTemplates = tasks.register('prepareRegistrationTemplates', Sync) {
     from(rootProject.file('modules/core/src/codeTemplate/java')) {
         include 'template/lib/kasuga/registration/minecraft/**',
@@ -198,6 +229,9 @@ configurations {
 dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    box3dTestImplementation project(':modules:render-core')
+    box3dTestImplementation 'org.junit.jupiter:junit-jupiter:5.7.1'
+    box3dTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     api(project(':modules:inject')) { transitive = false }
     bundledLibrary(project(':modules:inject')) { transitive = false }
@@ -303,3 +337,5 @@ tasks.named('shadowJar') {
 }
 
 tasks.named('assemble') { dependsOn 'shadowJar' }
+
+apply from: rootProject.file('gradle/box3d.gradle')
