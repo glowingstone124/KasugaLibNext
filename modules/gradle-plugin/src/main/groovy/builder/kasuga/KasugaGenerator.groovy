@@ -2,7 +2,9 @@ package builder.kasuga
 
 import org.gradle.api.Project
 import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.tasks.ClasspathNormalizer
 import org.gradle.api.tasks.JavaExec
+import org.gradle.api.tasks.PathSensitivity
 
 import org.gradle.api.provider.Provider
 
@@ -33,47 +35,32 @@ public class KasugaGenerator {
                 compileClasspath += project.configurations.codeGenDependency
             }
         }
-        var minecraftArtifacts = project.tasks.findByName("createMinecraftArtifacts");
-
-        String utilsMinecraftArtifactPath = null
-        File utilsArtifactsDir = null
-        def utilsProject = project.findProject(':modules:utils')
-        if (utilsProject != null) {
-            def utilsTask = utilsProject.tasks.findByName("createMinecraftArtifacts")
-            if (utilsTask != null) {
-                utilsMinecraftArtifactPath = utilsTask.path
-            }
-            utilsArtifactsDir = new File(utilsProject.buildDir, "moddev/artifacts")
-        }
-
         var runGenerator = project.tasks.register('runGenerator', JavaExec) {
-
             inputs.files(project.sourceSets.codeTemplate.allSource)
-                    .withPropertyName("sources");
-            inputs.files(variantSources).withPropertyName('variantSources')
+                    .withPropertyName('sources').withPathSensitivity(PathSensitivity.RELATIVE)
             dependsOn(preparationTasks)
+            // ModDev registers this task when the platform version is configured, which may
+            // happen after useGenerator(). Keep the dependency lazy for a clean parallel build.
+            dependsOn(project.tasks.matching { it.name == 'createMinecraftArtifacts' })
 
             outputs.dir("$project.buildDir/generated/sources/codegen/java/main")
 
             classpath = project.configurations.codeGenDependency
             mainClass = 'lib.kasuga.internal.generator.KasugaCodeGen'
-            Provider<Set<FileSystemLocation>> provider = project.sourceSets.main.runtimeClasspath.getElements()
+            def symbols = project.sourceSets.main.compileClasspath
+            inputs.files(symbols).withPropertyName('symbolClasspath').withNormalizer(ClasspathNormalizer)
+            Provider<Set<FileSystemLocation>> classpathEntries = symbols.elements
             def codeTemplateSrcDir = project.sourceSets.codeTemplate.java.srcDirs.first().absolutePath
             def generatedDir = "$project.buildDir/generated/sources/codegen/java/main"
             def buildDirPath = project.buildDir.absolutePath
             def mainSrcDirs = project.sourceSets.main.java.srcDirs
                     .findAll { !it.absolutePath.startsWith(buildDirPath) }
+            List<File> sourceRoots = mainSrcDirs.toList() + variantSources
+            inputs.files(sourceRoots).withPropertyName('symbolSources').withPathSensitivity(PathSensitivity.RELATIVE)
             args(codeTemplateSrcDir)
             args(generatedDir)
-            doFirst{
-                def allClasspath = (mainSrcDirs + variantSources)*.absolutePath + provider.get().asFile*.absolutePath
-                if (utilsArtifactsDir != null && utilsArtifactsDir.exists()) {
-                    utilsArtifactsDir.eachFile { f ->
-                        if (f.name.endsWith('.jar') && !f.name.endsWith('-sources.jar')) {
-                            allClasspath.add(f.absolutePath)
-                        }
-                    }
-                }
+            doFirst {
+                def allClasspath = sourceRoots*.absolutePath + classpathEntries.get().asFile*.absolutePath
                 args(allClasspath.join(File.pathSeparator))
             }
 
@@ -81,10 +68,6 @@ public class KasugaGenerator {
                 languageVersion = project.java.toolchain.languageVersion
             })
 
-            if(minecraftArtifacts != null)
-                dependsOn(minecraftArtifacts)
-            if(utilsMinecraftArtifactPath != null)
-                dependsOn(utilsMinecraftArtifactPath)
         }
         project.compileJava.dependsOn(runGenerator)
 
