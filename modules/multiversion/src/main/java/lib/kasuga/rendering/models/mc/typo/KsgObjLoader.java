@@ -16,6 +16,7 @@ import lib.kasuga.rendering.models.uml.structure.skeleton.Bone;
 import lib.kasuga.rendering.models.uml.structure.skeleton.data.BoneData;
 import lib.kasuga.rendering.models.uml.structure.skeleton.data.SkeletonData;
 import lib.kasuga.rendering.models.uml.typo.wavefont_obj.ObjContextData;
+import lib.kasuga.rendering.models.uml.typo.wavefont_obj.ObjFlatMesh;
 import lib.kasuga.rendering.models.uml.typo.wavefont_obj.ObjModelLoader;
 import lib.kasuga.rendering.models.uml.typo.wavefont_obj.ObjTextureData;
 import net.minecraft.client.Minecraft;
@@ -32,6 +33,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 /** Loads OBJ geometry and MTL surface materials from Minecraft resource packs. */
 public final class KsgObjLoader extends ObjModelLoader<String, Identifier, String> {
@@ -47,6 +49,17 @@ public final class KsgObjLoader extends ObjModelLoader<String, Identifier, Strin
         this.resources = resources;
         this.modelId = modelId;
     }
+
+    /** Uses the standard OBJ/MTL processors, exporting a custom interleaved GPU stream. */
+    public static FlatMesh loadFlatMesh(String objSource, String mtlSource, Function<String, Float> kindResolver) {
+        ObjFlatMesh mesh = ObjFlatMesh.load(objSource, mtlSource, kindResolver);
+        return new FlatMesh(mesh.vertices(), mesh.triangleCount(), mesh.vertexCount(),
+                mesh.minX(), mesh.minY(), mesh.minZ(), mesh.maxX(), mesh.maxY(), mesh.maxZ(), mesh.materials());
+    }
+
+    public record FlatMesh(float[] vertices, int triangleCount, int vertexCount,
+                           float minX, float minY, float minZ, float maxX, float maxY, float maxZ,
+                           Map<String, ObjTextureData> materials) {}
 
     public static RenderPearlModelSource open(Identifier identifier) throws IOException {
         ResourceManager resourceManager = Minecraft.getInstance().getResourceManager();

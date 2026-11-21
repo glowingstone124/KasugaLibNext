@@ -7,6 +7,7 @@ import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.textures.FilterMode;
 import lib.kasuga.rendering.effect.post.PostProcessContext;
 import lib.kasuga.rendering.effect.shader.RenderPearlFullscreenShader;
+import lib.kasuga.rendering.effect.shader.RenderPearlGraphicsShader;
 
 import java.util.Map;
 import java.util.Objects;
@@ -61,6 +62,17 @@ public final class PostProcessGraphContext {
     public void fullscreen(PostProcessGraphTarget output, RenderPearlFullscreenShader shader, boolean clear,
                            Map<String, double[]> uniforms, Consumer<RenderPass> inputs) {
         shader.draw(write(output), clear, uniforms, inputs);
+    }
+
+    /** Records native geometry into a declared output, including its optional depth attachment. */
+    public void render(PostProcessGraphTarget output, RenderPipeline pipeline, boolean clearColor, boolean clearDepth,
+                       Consumer<RenderPass> commands) {
+        PostProcessContext.render(write(output), pipeline, clearColor, clearDepth, commands);
+    }
+
+    public void render(PostProcessGraphTarget output, RenderPearlGraphicsShader.Prepared prepared,
+                       boolean clearColor, boolean clearDepth, Consumer<RenderPass> commands) {
+        prepared.render(write(output), clearColor, clearDepth, commands);
     }
 
     /** Bind a declared color input using the target's sampling policy. */

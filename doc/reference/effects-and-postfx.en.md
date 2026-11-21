@@ -343,6 +343,9 @@ A callback exception logs the graph and its owner and leaves the other graphs ru
 Register a RenderPearl `RenderPipeline` in `RegisterRenderPipelinesEvent` and put its GLSL in resource files.
 Call `context.fullscreen(output, pipeline, clear, bindings)` inside a graph pass.
 In the bindings callback, use `context.bindColor(pass, name, source, attachmentIndex)` and `context.bindDepth(pass, name, source)`.
+For geometry, call `context.render(output, pipeline, clearColor, clearDepth, commands)` and submit the draws in the callback.
+The graph resolves the pipeline's color attachments and clears depth to zero when requested, following RenderPearl's reverse-Z convention.
+Generated vertex and fragment shaders can use the same method with a `RenderPearlGraphicsShader.Prepared` draw.
 Color attachments support `RGBA8`, `RGBA16F`, and `RGBA32F` and must match the pipeline's attachment formats.
 `copyColor` supports scaling. `copyDepth` requires matching dimensions and depth formats.
 The preceding `BLIT_SCREEN`, `ShaderInstance`, and OpenGL TBO examples apply to 1.21.1.

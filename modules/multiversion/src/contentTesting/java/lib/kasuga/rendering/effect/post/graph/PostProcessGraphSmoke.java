@@ -7,9 +7,10 @@ import com.mojang.logging.LogUtils;
 import com.mojang.renderpearl.api.GpuFormat;
 import com.mojang.renderpearl.api.buffers.GpuBuffer;
 import com.mojang.renderpearl.api.commands.RenderPass;
-import com.mojang.renderpearl.api.commands.RenderPassDescriptor;
 import com.mojang.renderpearl.api.pipeline.BindGroupLayout;
 import com.mojang.renderpearl.api.pipeline.ColorTargetState;
+import com.mojang.renderpearl.api.pipeline.CompareOp;
+import com.mojang.renderpearl.api.pipeline.DepthStencilState;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import com.mojang.renderpearl.api.pipeline.UniformType;
@@ -38,7 +39,6 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
-import org.joml.Vector4f;
 import org.lwjgl.system.MemoryStack;
 
 import java.io.IOException;
@@ -186,7 +186,7 @@ public final class PostProcessGraphSmoke {
                 .target(PostProcessTargetDescriptor.builder(DEPTH_ID).useDepth(true).build())
                 .target(PostProcessTargetDescriptor.builder(PROBE_ID).fixedSize(16, 16).build())
                 .target(PostProcessTargetDescriptor.builder(GENERATED_ID).fixedSize(16, 16).build())
-                .target(PostProcessTargetDescriptor.builder(GRAPHICS_ID).fixedSize(16, 16).build())
+                .target(PostProcessTargetDescriptor.builder(GRAPHICS_ID).fixedSize(16, 16).useDepth(true).build())
                 .prepare((context, frame) -> {
                     if (prepared) return true;
                     require(threw && !brokenRegistration.isActive(), "Failed graph was not isolated from the next graph");
@@ -210,14 +210,11 @@ public final class PostProcessGraphSmoke {
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/graphics"), context -> {
                     graphicsOutput = context.write(GRAPHICS);
                     RenderPearlGraphicsShader.Prepared preparedDraw = graphicsShader.prepare(Map.of("Scale", new double[]{.8}));
-                    RenderPassDescriptor descriptor = RenderPassDescriptor.builder(() -> "Kasuga generated triangle smoke")
-                            .withColorAttachment(graphicsOutput.getColorTextureView(), Optional.of(new Vector4f())).build();
-                    try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(descriptor)) {
-                        preparedDraw.bind(pass);
+                    context.render(GRAPHICS, preparedDraw, true, true, pass -> {
                         context.bindColor(pass, "ProbeSampler", PROBE, 0);
                         pass.setVertexBuffer(0, triangle.slice());
                         pass.draw(3, 1, 0, 0);
-                    }
+                    });
                 }).reads(PROBE).writes(GRAPHICS).build())
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/display"), context -> {
                     hdr = PostProcessContext.color(context.read(COLORS), 0);
@@ -232,7 +229,7 @@ public final class PostProcessGraphSmoke {
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/capture_depth"),
                         context -> context.copyDepth(MAIN, DEPTH)).readsMain().writes(DEPTH).build())
                 .pass(PostProcessGraphPassDescriptor.builder(id("graph_smoke/render_mrt"),
-                        context -> context.fullscreen(COLORS, MRT, true, pass -> {})).writes(COLORS).build())
+                        context -> context.render(COLORS, MRT, true, false, pass -> pass.draw(3, 1, 0, 0))).writes(COLORS).build())
                 .build();
         PostProcessGraphRegistration original = PostProcessGraphRegistry.register(id("smoke"), 0, DuplicatePolicy.FAIL, graph);
         registration = PostProcessGraphRegistry.register(id("smoke"), 0, DuplicatePolicy.REPLACE, graph);
@@ -279,6 +276,7 @@ public final class PostProcessGraphSmoke {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             graphicsShader = RenderPearlGraphicsShader.compile(program, client.getResourceManager(), RenderPipeline.builder()
                     .withVertexBinding(0, format).withPrimitiveTopology(PrimitiveTopology.TRIANGLES)
+                    .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN, true))
                     .withColorTargetState(ColorTargetState.DEFAULT).withCull(false));
             ByteBuffer vertices = stack.malloc(6 * Float.BYTES);
             vertices.asFloatBuffer().put(new float[]{-.8f, -.8f, .8f, -.8f, 0, .8f});
@@ -325,7 +323,7 @@ public final class PostProcessGraphSmoke {
         generatedShader.close();
         triangle.close();
         graphicsShader.close();
-        LogUtils.getLogger().info("KASUGA_SHADER_GRAPHICS_PASS vertex-buffer,linked-varyings,shared-std140,sampler,triangle-bounds");
+        LogUtils.getLogger().info("KASUGA_SHADER_GRAPHICS_PASS vertex-buffer,linked-varyings,shared-std140,sampler,triangle-bounds,reverse-depth-clear");
         LogUtils.getLogger().info("KASUGA_SHADER_DSL_PASS generated-fullscreen,uniform-defaults,uniform-overrides,std140,sampler");
         WorldPipelineSmoke.finish();
         GpuTextureView probeView = PostProcessContext.color(probe, 0);

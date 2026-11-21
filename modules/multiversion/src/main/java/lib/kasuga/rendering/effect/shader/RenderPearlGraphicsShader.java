@@ -1,10 +1,12 @@
 package lib.kasuga.rendering.effect.shader;
 
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.pipeline.CompiledRenderPipeline;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
+import lib.kasuga.rendering.effect.post.PostProcessContext;
 import lib.kasuga.shader.ShaderProgram;
 import lib.kasuga.shader.backend.RenderPearlGlslBackend;
 import lib.kasuga.shader.backend.Std140UniformBlock;
@@ -14,15 +16,19 @@ import org.jspecify.annotations.Nullable;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /** Owns a Shader DSL vertex/fragment pipeline on the Minecraft graphics device. */
 public final class RenderPearlGraphicsShader implements AutoCloseable {
     private final ShaderProgram program;
+    private final RenderPipeline pipeline;
     private final CompiledRenderPipeline compiled;
     private final Std140UniformBlock uniforms;
 
-    private RenderPearlGraphicsShader(ShaderProgram program, CompiledRenderPipeline compiled, Std140UniformBlock uniforms) {
+    private RenderPearlGraphicsShader(ShaderProgram program, RenderPipeline pipeline, CompiledRenderPipeline compiled,
+                                      Std140UniformBlock uniforms) {
         this.program = program;
+        this.pipeline = pipeline;
         this.compiled = compiled;
         this.uniforms = uniforms;
     }
@@ -41,7 +47,7 @@ public final class RenderPearlGraphicsShader implements AutoCloseable {
                 .build();
         CompiledRenderPipeline compiled = RenderPearlShaderSupport.compile(pipeline, id, generated.vertexSource(), id,
                 generated.fragmentSource(), resources);
-        return new RenderPearlGraphicsShader(program, compiled, uniforms);
+        return new RenderPearlGraphicsShader(program, pipeline, compiled, uniforms);
     }
 
     /** Uploads the frame's parameters before starting a render pass. */
@@ -71,6 +77,18 @@ public final class RenderPearlGraphicsShader implements AutoCloseable {
         public void bind(RenderPass pass) {
             requireOpen();
             pass.setPipeline(compiled);
+            bindParameters(pass);
+        }
+
+        public void render(RenderTarget output, boolean clearColor, boolean clearDepth, Consumer<RenderPass> commands) {
+            requireOpen();
+            PostProcessContext.render(output, pipeline, compiled, clearColor, clearDepth, pass -> {
+                bindParameters(pass);
+                commands.accept(pass);
+            });
+        }
+
+        private void bindParameters(RenderPass pass) {
             if (parameters != null) pass.setUniform(RenderPearlGlslBackend.PARAMETERS, parameters);
         }
     }

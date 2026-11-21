@@ -24,6 +24,7 @@ import org.joml.Vector4fc;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.function.Consumer;
 
 /** Native post-process commands for a completed world view. Targets are borrowed for the current graph pass. */
@@ -158,12 +159,27 @@ public final class PostProcessContext {
     /** Runs a fullscreen triangle using a caller-owned compiled pipeline. */
     public static void fullscreen(RenderTarget target, RenderPipeline pipeline, CompiledRenderPipeline compiled,
                                   boolean clear, Consumer<RenderPass> inputs) {
+        render(target, pipeline, compiled, clear, false, pass -> {
+            inputs.accept(pass);
+            pass.draw(3, 1, 0, 0);
+        });
+    }
+
+    /** Records custom geometry into a target using the attachment layout declared by the pipeline. */
+    public static void render(RenderTarget target, RenderPipeline pipeline, boolean clearColor, boolean clearDepth,
+                              Consumer<RenderPass> commands) {
+        render(target, pipeline, RenderSystem.getCompiledPipeline(pipeline), clearColor, clearDepth, commands);
+    }
+
+    /** Records custom geometry using a caller-owned compiled pipeline. Depth clears use reverse Z. */
+    public static void render(RenderTarget target, RenderPipeline pipeline, CompiledRenderPipeline compiled,
+                              boolean clearColor, boolean clearDepth, Consumer<RenderPass> commands) {
         RenderSystem.assertOnRenderThread();
         RenderPassDescriptor.Builder pass = RenderPassDescriptor.builder(() -> pipeline.getLocation().toString());
         PostProcessTargetDescriptor descriptor = PostProcessTargetPool.descriptor(target);
-        Optional<Vector4fc> clearColor = Optional.empty();
-        if (clear) {
-            clearColor = Optional.of(descriptor == null ? new Vector4f()
+        Optional<Vector4fc> colorValue = Optional.empty();
+        if (clearColor) {
+            colorValue = Optional.of(descriptor == null ? new Vector4f()
                     : new Vector4f(descriptor.clearRed(), descriptor.clearGreen(), descriptor.clearBlue(), descriptor.clearAlpha()));
         }
         List<ColorTargetState> attachments = pipeline.getColorTargetStates();
@@ -177,18 +193,29 @@ public final class PostProcessContext {
             if (color.texture().getFormat() != state.format()) {
                 throw new IllegalArgumentException("Pipeline and target formats differ at color attachment " + index);
             }
-            pass.withColorAttachment(color, clearColor);
+            pass.withColorAttachment(color, colorValue);
         }
-        if (pipeline.wantsDepthTexture()) pass.withDepthAttachment(depth(target));
-        draw(pass, compiled, inputs);
+        if (pipeline.wantsDepthTexture()) {
+            pass.withDepthAttachment(depth(target), clearDepth ? OptionalDouble.of(0.0) : OptionalDouble.empty());
+        } else if (clearDepth) {
+            throw new IllegalArgumentException("A depth clear requires a pipeline with a depth attachment");
+        }
+        render(pass, compiled, commands);
     }
 
     private static void draw(RenderPassDescriptor.Builder descriptor, CompiledRenderPipeline pipeline, Consumer<RenderPass> inputs) {
+        render(descriptor, pipeline, pass -> {
+            inputs.accept(pass);
+            pass.draw(3, 1, 0, 0);
+        });
+    }
+
+    private static void render(RenderPassDescriptor.Builder descriptor, CompiledRenderPipeline pipeline,
+                               Consumer<RenderPass> commands) {
         try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(descriptor.build())) {
             pass.setPipeline(pipeline);
             RenderSystem.bindDefaultUniforms(pass);
-            inputs.accept(pass);
-            pass.draw(3, 1, 0, 0);
+            commands.accept(pass);
         }
     }
 
