@@ -6,6 +6,7 @@ import com.mojang.logging.LogUtils;
 import com.mojang.renderpearl.api.textures.GpuTextureView;
 import lib.kasuga.KasugaLib;
 import lib.kasuga.rendering.effect.pipeline.WorldProjection;
+import lib.kasuga.scene.SceneControls;
 import lib.kasuga.scene.SceneHost;
 import lib.kasuga.scene.ScenePlacement;
 import lib.kasuga.scene.ScenePose;
@@ -123,6 +124,7 @@ public final class UIBackend implements AutoCloseable {
     }
 
     public static boolean interceptKey(long window, int action, KeyEvent event) {
+        if (SceneControls.intercept(window, event.key(), action)) return true;
         Minecraft client = Minecraft.getInstance();
         return window == client.getWindow().handle() && MAIN_VIEW.keyboard.key(
                 event.key(), event.keycode(), action, event.modifiers(), MAIN_VIEW.canCaptureKeyboard(client));

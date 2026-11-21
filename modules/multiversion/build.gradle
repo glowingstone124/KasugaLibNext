@@ -128,6 +128,9 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/scene/SceneGround.java',
                 'lib/kasuga/scene/SceneGroundRegistrar.java',
                 'lib/kasuga/scene/SceneProps.java',
+                'lib/kasuga/scene/SceneControls.java',
+                'lib/kasuga/scene/SceneOverlay.java',
+                'lib/kasuga/scene/SceneWarmup.java',
                 'lib/kasuga/rendering/models/mc/scene/BlueprintImporters.java',
                 'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipHelper.java',
                 'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipResource.java',
@@ -188,6 +191,28 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                     .replaceAll(/\.isSolidRender\(level, \w+\)/, '.isSolidRender()')
                     .replace('level.getSkyDarken(1f)',
                             'level.environmentAttributes().getValue(net.minecraft.world.attribute.EnvironmentAttributes.SKY_LIGHT_FACTOR, center, null)')
+        }
+    }
+    filesMatching('**/SceneControls.java') {
+        filter { String line ->
+            line.replace('org.lwjgl.glfw.GLFW', 'com.mojang.blaze3d.platform.InputConstants')
+                    .replace('GLFW.GLFW_', 'InputConstants.')
+                    .replace('GLFW_PRESS/RELEASE', 'InputConstants.PRESS/RELEASE')
+        }
+    }
+    filesMatching('**/SceneOverlay.java') {
+        filter { String line ->
+            line.replace('import net.minecraft.client.gui.GuiGraphics;', 'import net.minecraft.client.gui.GuiGraphicsExtractor;')
+                    .replace('GuiGraphics gui', 'GuiGraphicsExtractor gui')
+                    .replace('GuiGraphics graphics', 'GuiGraphicsExtractor graphics')
+                    .replace('void render(GuiGraphicsExtractor gui,', 'void extractRenderState(GuiGraphicsExtractor gui,')
+                    .replace('void renderBackground(', 'void extractBackground(')
+                    .replace('prompt.init(Minecraft.getInstance(), ', 'prompt.init(')
+                    .replace('.getMainCamera()', '.mainCamera()')
+                    .replace('.drawString(', '.text(')
+                    .replace('.pose().pushPose()', '.pose().pushMatrix()')
+                    .replace('.pose().popPose()', '.pose().popMatrix()')
+                    .replace('.pose().scale(scale, scale, 1)', '.pose().scale(scale, scale)')
         }
     }
     into(layout.buildDirectory.dir('generated/sources/models/java'))

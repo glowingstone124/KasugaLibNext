@@ -3,6 +3,7 @@ package lib.kasuga.scene;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.block.state.BlockState;
@@ -50,12 +51,12 @@ public final class SceneWarmup {
     /** Uses the host renderer's public readiness queries, including Sodium's implementations. */
     public boolean ready() {
         RenderSystem.assertOnRenderThread();
-        var minecraft = Minecraft.getInstance();
+        Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level != level || minecraft.levelRenderer == null) {
             waitReason = "scene level";
             return false;
         }
-        for (var entry : required.entrySet()) {
+        for (Map.Entry<BlockPos, BlockState> entry : required.entrySet()) {
             if (!level.hasChunkAt(entry.getKey()) || !level.getBlockState(entry.getKey()).equals(entry.getValue())) {
                 waitReason = "authored block " + entry.getKey();
                 return false;
@@ -70,12 +71,12 @@ public final class SceneWarmup {
             }
         }
         if (!rebuilt) {
-            minecraft.levelRenderer.allChanged();
+            SceneClientPlatform.rebuildTerrain(minecraft);
             rebuilt = true;
             waitReason = "renderer rebuild";
             return false;
         }
-        var frustum = minecraft.levelRenderer.getFrustum();
+        Frustum frustum = SceneClientPlatform.frustum(minecraft);
         if (frustum == null) {
             waitReason = "first scene frame";
             return false;
@@ -83,15 +84,15 @@ public final class SceneWarmup {
         for (int x = minimum.getX() >> 4; x <= maximum.getX() >> 4; x++) {
             for (int y = minimum.getY() >> 4; y <= maximum.getY() >> 4; y++) {
                 for (int z = minimum.getZ() >> 4; z <= maximum.getZ() >> 4; z++) {
-                    var origin = SectionPos.of(x, y, z).origin();
-                    var area = new AABB(Math.max(origin.getX(), minimum.getX()),
+                    BlockPos origin = SectionPos.of(x, y, z).origin();
+                    AABB area = new AABB(Math.max(origin.getX(), minimum.getX()),
                             Math.max(origin.getY(), minimum.getY()), Math.max(origin.getZ(), minimum.getZ()),
                             Math.min(origin.getX() + 16, maximum.getX() + 1),
                             Math.min(origin.getY() + 16, maximum.getY() + 1),
                             Math.min(origin.getZ() + 16, maximum.getZ() + 1));
                     // Terrain renderers deliberately leave off-camera sections uncompiled. Waiting
                     // for those meshes would hold black forever; data is still required everywhere.
-                    if (frustum.isVisible(area) && !minecraft.levelRenderer.isSectionCompiled(origin)) {
+                    if (frustum.isVisible(area) && !SceneClientPlatform.sectionCompiled(minecraft, origin)) {
                         waitReason = "visible terrain section " + origin;
                         return false;
                     }

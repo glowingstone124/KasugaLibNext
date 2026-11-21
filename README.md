@@ -122,6 +122,12 @@ Box3D physics blocks and configured ragdolls run with the standard model
 scheduler on both backends. In a client world, use `/kasuga_physics block` or
 `/kasuga_ragdoll deploy <model> <config>`.
 
+`MinecraftStage` manages temporary stage blocks and the player's return point.
+`SceneProps` adds block and item props, including Box3D bodies. On the client,
+`SceneWarmup` waits for authored blocks and visible terrain, `SceneOverlay`
+supplies scene fades and world prompts, and `SceneControls` scopes scene input
+while leaving movement available. In 26.3, use `InputConstants` key codes.
+
 Document items register typed components with `DocumentComponentReg`. Their
 first-person renderers submit page geometry and text through
 `SubmitNodeCollector` in 26.3, using the same one- and two-handed page layouts
@@ -186,6 +192,7 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_NATIVE_JSON_PASS`, `KASUGA_MMD_PASS`, `KASUGA_MMD_GUI_PASS`, `KASUGA_GUI_PREVIEW_PASS`, `KASUGA_STRUCTURE_PREVIEW_PASS`,
 `KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_PIPELINE_PASS`, `KASUGA_POST_GRAPH_PASS`,
 `KASUGA_SHADER_DSL_PASS`, `KASUGA_BLACK_HOLE_PASS`, `KASUGA_WORLD_UI_PASS`,
+`KASUGA_STAGE_PASS`, `KASUGA_SCENE_CLIENT_PASS`,
 `KASUGA_FRAME_OUTPUT_PASS`, `KASUGA_FRAME_WINDOW_PASS`, `KASUGA_PLAYER_CAMERA_PASS`,
 `KASUGA_DETACHED_CAMERA_PASS`, `KASUGA_REMOTE_CAMERA_PASS`, `KASUGA_CAMERA_HISTORY_PASS`, and `KASUGA_SCRIPTING_PASS`.
 Captures of the models, animation, lighting, held documents, and GUI previews

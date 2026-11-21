@@ -1,10 +1,11 @@
 package lib.kasuga.scene;
 
 import lib.kasuga.KasugaLib;
-import lib.kasuga.rendering.models.mc.Constants;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
@@ -24,12 +25,12 @@ import java.util.Set;
 public final class SceneOverlay implements AutoCloseable {
     private static final Set<SceneOverlay> OVERLAYS = new LinkedHashSet<>();
     /** Null means that this overlay is a global transition and survives a level change. */
-    private Object level;
+    private ClientLevel level;
     private final Set<Prompt> prompts = new LinkedHashSet<>();
     private Track track;
     private Fade fade;
     private boolean closed;
-    private SceneOverlay(Object level) { this.level = level; OVERLAYS.add(this); }
+    private SceneOverlay(ClientLevel level) { this.level = level; OVERLAYS.add(this); }
     public static SceneOverlay open() { return new SceneOverlay(Minecraft.getInstance().level); }
     /** Opens a transition overlay before a scene changes the client level. */
     public static SceneOverlay openGlobal() { return new SceneOverlay(null); }
@@ -43,8 +44,10 @@ public final class SceneOverlay implements AutoCloseable {
     }
     public Prompt prompt(Vec3 position, String key, String label) {
         if (closed) throw new IllegalStateException("Overlay is closed");
-        var prompt = new Prompt(position, key, label);
-        prompt.init(Minecraft.getInstance(), 150, 32); prompts.add(prompt); return prompt;
+        Prompt prompt = new Prompt(position, key, label);
+        prompt.init(Minecraft.getInstance(), 150, 32);
+        prompts.add(prompt);
+        return prompt;
     }
     public Track track(String title, String artist, String album, float durationSeconds) {
         if (closed) throw new IllegalStateException("Overlay is closed");
@@ -57,29 +60,37 @@ public final class SceneOverlay implements AutoCloseable {
         return fade = new Fade(seconds);
     }
     @SubscribeEvent public static void frame(RenderFrameEvent.Pre event) {
-        var mc = Minecraft.getInstance();
-        if (Constants.UI_BACKEND == null) return;
-        for (var overlay : OVERLAYS) for (var prompt : overlay.prompts) {
-            if (!prompt.visible || overlay.level != null && mc.level != overlay.level) {
-                Constants.UI_BACKEND.removeRenderable(prompt); continue;
+        Minecraft client = Minecraft.getInstance();
+        for (SceneOverlay overlay : OVERLAYS) {
+            for (Prompt prompt : overlay.prompts) {
+                if (!prompt.visible || client.level == null || overlay.level != null && client.level != overlay.level) {
+                    SceneClientPlatform.removePrompt(prompt);
+                    continue;
+                }
+                Matrix4f transform = new Matrix4f().rotation(client.gameRenderer.getMainCamera().rotation())
+                        .scale(.006f, -.006f, 1).translate(-75, -16, 0);
+                SceneClientPlatform.placePrompt(prompt, prompt.position, transform);
             }
-            var transform = new Matrix4f().translation((float) prompt.position.x, (float) prompt.position.y,
-                    (float) prompt.position.z).rotate(mc.gameRenderer.getMainCamera().rotation())
-                    .scale(.006f, -.006f, 1).translate(-75, -16, 0);
-            if (Constants.UI_BACKEND.containsRenderable(prompt)) Constants.UI_BACKEND.setTransform(prompt, transform);
-            else Constants.UI_BACKEND.addRenderable(prompt, transform);
         }
     }
     @SubscribeEvent public static void gui(RenderGuiEvent.Post event) {
-        var mc = Minecraft.getInstance();
-        if (mc.screen != null) return;
-        for (var overlay : OVERLAYS) if (overlay.level == null || overlay.level == mc.level) {
-            if (overlay.track != null && overlay.track.visible) overlay.track.render(event.getGuiGraphics());
-            if (overlay.fade != null && overlay.fade.visible()) overlay.fade.render(event.getGuiGraphics());
+        Minecraft client = Minecraft.getInstance();
+        if (SceneClientPlatform.hasScreen(client)) return;
+        GuiGraphics graphics = event.getGuiGraphics();
+        for (SceneOverlay overlay : OVERLAYS) {
+            if (overlay.level != null && overlay.level != client.level) continue;
+            if (overlay.track != null && overlay.track.visible) {
+                SceneClientPlatform.beginGuiLayer(graphics);
+                overlay.track.render(graphics);
+            }
+            if (overlay.fade != null && overlay.fade.visible()) {
+                SceneClientPlatform.beginGuiLayer(graphics);
+                overlay.fade.render(graphics);
+            }
         }
     }
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
-        for (var overlay : List.copyOf(OVERLAYS)) {
+        for (SceneOverlay overlay : List.copyOf(OVERLAYS)) {
             if (overlay.level != null && Minecraft.getInstance().level != overlay.level) overlay.close();
             else if (overlay.fade != null) overlay.fade.tick(.05f);
         }
@@ -87,7 +98,7 @@ public final class SceneOverlay implements AutoCloseable {
     @Override public void close() {
         if (closed) return;
         closed = true;
-        if (Constants.UI_BACKEND != null) for (var prompt : prompts) Constants.UI_BACKEND.removeRenderable(prompt);
+        for (Prompt prompt : prompts) SceneClientPlatform.removePrompt(prompt);
         if (fade != null) fade.close();
         prompts.clear(); OVERLAYS.remove(this);
     }
@@ -121,8 +132,8 @@ public final class SceneOverlay implements AutoCloseable {
         public Track seconds(float value) { seconds = Math.max(0, value); return this; }
         public boolean visible() { return visible; }
         private void render(GuiGraphics gui) {
-            var minecraft = Minecraft.getInstance();
-            var font = minecraft.font;
+            Minecraft minecraft = Minecraft.getInstance();
+            Font font = minecraft.font;
             float scale = Math.min(1f, 2f / (float) minecraft.getWindow().getGuiScale());
             int widthAvailable = Math.round(gui.guiWidth() / scale);
             int heightAvailable = Math.round(gui.guiHeight() / scale);
