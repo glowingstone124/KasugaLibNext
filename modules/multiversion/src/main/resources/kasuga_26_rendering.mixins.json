@@ -19,6 +19,7 @@
     "FrontendGpuDeviceAccess",
     "GlDeviceWindowAccess",
     "GuiWindowStateAccess",
+    "HeadlessMinecraftMixin",
     "MinecraftFrameOutputMixin",
     "WorldUiGameRendererMixin",
     "WorldUiKeyboardMixin",

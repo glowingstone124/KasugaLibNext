@@ -103,7 +103,7 @@ jobs:
           gradle-home-cache-strict-match: false
           cache-read-only: ${{ github.event_name == 'pull_request' }}
       - name: Build and test Minecraft 26.3
-        run: ./gradlew -PkasugaMinecraft=26.3 build renderingReleaseCheck :external:slp:javet:shadowJar --console=plain
+        run: ./gradlew -PkasugaMinecraft=26.3 build renderingReleaseCheck :modules:multiversion:contentTestingClasses :external:slp:javet:shadowJar --console=plain
       - name: Upload Minecraft 26.3 base mod
         uses: actions/upload-artifact@v4
         with:

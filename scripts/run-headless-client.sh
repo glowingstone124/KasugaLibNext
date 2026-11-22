@@ -3,6 +3,20 @@ set -euo pipefail
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 repo_dir=$(cd -- "$script_dir/.." && pwd)
 cd "$repo_dir"
+for arg in "$@"; do
+    if [[ $arg == -PkasugaMinecraft=26.3 ]]; then
+        backend=${KASUGA_HEADLESS_BACKEND:-hidden}
+        if [[ $(uname -s) == Linux ]]; then
+            backend=${KASUGA_HEADLESS_BACKEND:-offscreen}
+            if [[ $backend == egl || $backend == offscreen ]]; then
+                backend=offscreen
+                unset DISPLAY WAYLAND_DISPLAY
+                export EGL_PLATFORM=${EGL_PLATFORM:-surfaceless}
+            fi
+        fi
+        exec ./gradlew :modules:multiversion:runClientHeadless "-PkasugaHeadlessBackend=$backend" "$@"
+    fi
+done
 backend=${KASUGA_HEADLESS_BACKEND:-hidden}
 launcher_args=(:modules:modelling:runClientHeadless)
 if [[ $(uname -s) == Linux ]]; then

@@ -5,10 +5,10 @@ Interface, configuration, and call reference. For the principles see [frame-outp
 ## Minecraft 26.3
 
 `MinecraftFrameOutputs` publishes the main color target after world and GUI composition. Each
-view has one shared RGBA8 GPU snapshot on Vulkan and OpenGL. `frame.resource()` is a borrowed
+view has one shared GPU snapshot in the source color format on Vulkan and OpenGL. `frame.resource()` is a borrowed
 `GpuTextureView` on the render thread. To keep a frame, copy it into owned GPU storage or enqueue
-RenderPearl readback during the callback. A new frame can overwrite the snapshot. Resizing and
-closing the last subscriber retire its texture.
+RenderPearl readback during the callback. A new frame can overwrite the snapshot. Changes to the
+size or color format retire the previous texture, as does closing the last subscriber.
 
 ```java
 var subscription = MinecraftFrameOutputs.open(FrameOutputMode.MIRROR, frame -> {
@@ -19,11 +19,20 @@ var subscription = MinecraftFrameOutputs.open(FrameOutputMode.MIRROR, frame -> {
 
 `OFFSCREEN_ONLY` presents a black window image when a live exclusive subscriber receives a
 frame. This keeps the window surface and swapchain running. Removing the last exclusive
-subscriber restores the game picture. A custom producer can publish its RGBA8_UNORM
+subscriber restores the game picture. A custom producer can publish a color
 `RenderTarget` with `MinecraftFrameOutputs.publish(viewId, target)` outside an active render pass.
 The dimensions come from that target. `MinecraftFrameWindows.open(viewId, options)` mirrors a
 published view in an SDL window. `MinecraftFrameWindows.createCamera` owns a detached view sized
 to the window framebuffer. See the [camera reference](cameras.en.md) for the supported settings.
+
+The 26.3 headless launcher keeps the primary SDL window hidden and skips swapchain acquisition
+and presentation. The main world and GUI still render into the usual color target. The launcher
+uses the desktop SDL driver on macOS and Windows and selects the SDL offscreen driver by default
+on Linux. `-PkasugaHeadlessGraphics` selects the RenderPearl backend.
+
+```sh
+scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true
+```
 
 ## Minecraft 1.21.1
 

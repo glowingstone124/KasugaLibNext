@@ -4,7 +4,13 @@ Nebula 是 `contentTesting` 中的完整渲染示例：OBJ 星舰穿过体积星
 
 ## 运行与录制
 
-需要 JDK 21；录制另外需要 Python、`nbtlib==2.0.4` 和 PATH 中的 `ffmpeg` / `ffprobe`。
+Minecraft 26.3 的开发客户端使用 Java 25。在私有单人世界运行 `/kasuga_nebula`，玩家会进入独立的空场景维度。Vulkan 和 OpenGL 共用星舰材质、星云 shader、曲速 FSM 和镜头时钟，Esc 退出时恢复玩家状态。
+
+```sh
+./gradlew -PkasugaMinecraft=26.3 :modules:multiversion:runClient
+```
+
+以下 Minecraft 1.21.1 录制流程需要 JDK 21、Python、`nbtlib==2.0.4` 和 PATH 中的 `ffmpeg` / `ffprobe`。
 
 ```sh
 python3 -m venv build/nebula-venv

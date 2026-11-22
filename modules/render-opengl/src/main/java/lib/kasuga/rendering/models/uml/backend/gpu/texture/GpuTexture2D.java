@@ -3,6 +3,8 @@ package lib.kasuga.rendering.models.uml.backend.gpu.texture;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL14;
+import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 
 import javax.imageio.ImageIO;
@@ -13,6 +15,10 @@ import java.nio.ByteBuffer;
 
 /** Render-thread-owned 2D texture with Kasuga's shared upload and cleanup policy. */
 public final class GpuTexture2D implements AutoCloseable {
+    private static final int[] UNPACK_PARAMETERS = {
+            GL11.GL_UNPACK_ALIGNMENT, GL11.GL_UNPACK_ROW_LENGTH, GL11.GL_UNPACK_SKIP_PIXELS,
+            GL11.GL_UNPACK_SKIP_ROWS, GL11.GL_UNPACK_SWAP_BYTES
+    };
     private int id;
 
     private GpuTexture2D(int id) { this.id = id; }
@@ -31,7 +37,7 @@ public final class GpuTexture2D implements AutoCloseable {
         requireSize(width, height);
         int previous = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
         int id = GL11.glGenTextures();
-        try {
+        try (PixelUnpack ignored = new PixelUnpack()) {
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, id);
             configure(wrap, pixelType == GL11.GL_FLOAT ? GL11.GL_NEAREST : GL11.GL_LINEAR);
             GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_BASE_LEVEL, 0);
@@ -77,7 +83,7 @@ public final class GpuTexture2D implements AutoCloseable {
     public static void updateRgba32f(int textureId, int width, int height, ByteBuffer pixels) {
         requireSize(width, height);
         int previous = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
-        try {
+        try (PixelUnpack ignored = new PixelUnpack()) {
             GL11.glBindTexture(GL11.GL_TEXTURE_2D, textureId);
             GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, width, height,
                     GL11.GL_RGBA, GL11.GL_FLOAT, pixels);
@@ -88,6 +94,25 @@ public final class GpuTexture2D implements AutoCloseable {
 
     private static void requireSize(int width, int height) {
         if (width <= 0 || height <= 0) throw new IllegalArgumentException("Texture dimensions must be positive");
+    }
+
+    private static final class PixelUnpack implements AutoCloseable {
+        private final int buffer = GL11.glGetInteger(GL21.GL_PIXEL_UNPACK_BUFFER_BINDING);
+        private final int[] state = new int[UNPACK_PARAMETERS.length];
+
+        PixelUnpack() {
+            GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
+            for (int i = 0; i < UNPACK_PARAMETERS.length; i++) {
+                int parameter = UNPACK_PARAMETERS[i];
+                state[i] = GL11.glGetInteger(parameter);
+                GL11.glPixelStorei(parameter, parameter == GL11.GL_UNPACK_ALIGNMENT ? 1 : 0);
+            }
+        }
+
+        @Override public void close() {
+            for (int i = 0; i < UNPACK_PARAMETERS.length; i++) GL11.glPixelStorei(UNPACK_PARAMETERS[i], state[i]);
+            GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, buffer);
+        }
     }
 
     private static void configure(int wrap, int filter) {

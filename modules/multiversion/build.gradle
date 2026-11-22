@@ -254,9 +254,13 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
     }
+    nebulaDemo {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
     contentTesting {
-        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + sourceSets.blackHoleDemo.output
-        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath + sourceSets.blackHoleDemo.output
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + sourceSets.blackHoleDemo.output + sourceSets.nebulaDemo.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath + sourceSets.blackHoleDemo.output + sourceSets.nebulaDemo.output
     }
 }
 
@@ -268,6 +272,27 @@ def prepareBlackHoleDemoSources = tasks.register('prepareBlackHoleDemoSources', 
     into layout.buildDirectory.dir('generated/sources/blackHoleDemo/java')
 }
 sourceSets.blackHoleDemo.java.srcDir(prepareBlackHoleDemoSources)
+
+def prepareNebulaDemoSources = tasks.register('prepareNebulaDemoSources', Sync) {
+    from(rootProject.file('modules/modelling/src/contentTesting/java')) {
+        include 'test/kasuga/modelling/demo/nebula/NebulaFlight.java',
+                'test/kasuga/modelling/demo/nebula/NebulaLightningData.java',
+                'test/kasuga/modelling/demo/nebula/NebulaPipeline.java',
+                'test/kasuga/modelling/demo/nebula/NebulaSimulation.java',
+                'test/kasuga/modelling/demo/nebula/NebulaTextureData.java',
+                'test/kasuga/modelling/demo/nebula/NebulaWarpSequence.java'
+    }
+    filter(updateMinecraftNames)
+    into layout.buildDirectory.dir('generated/sources/nebulaDemo/java')
+}
+sourceSets.nebulaDemo.java.srcDir(prepareNebulaDemoSources)
+
+tasks.named('processNebulaDemoResources', ProcessResources) {
+    from(rootProject.file('modules/modelling/src/contentTesting/resources')) {
+        include 'assets/kasuga_demo/models/constitution_starship*',
+                'assets/kasuga_demo/shaders/include/nebula*.glsl'
+    }
+}
 
 tasks.named('processBlackHoleDemoResources', ProcessResources) {
     from(rootProject.file('modules/modelling/src/contentTesting/resources')) {
@@ -327,6 +352,25 @@ dependencies {
     bundledLibrary 'de.javagl:jgltf-impl-v2:2.0.4'
 }
 
+def headlessDirectory = file(providers.gradleProperty('kasugaClientDirectory').getOrElse('run/26.3-headless'))
+def headlessTest = providers.gradleProperty('kasugaTestHeadless').getOrElse('false').toBoolean()
+def prepareHeadlessClient = tasks.register('prepareHeadlessClient') {
+    doLast {
+        File config = new File(headlessDirectory, 'config/fml.toml')
+        config.parentFile.mkdirs()
+        String settings = config.exists() ? config.getText('UTF-8') : ''
+        if (settings =~ /(?m)^\s*earlyWindowControl\s*=/) {
+            settings = settings.replaceAll(/(?m)^\s*earlyWindowControl\s*=.*$/, 'earlyWindowControl = false')
+        } else {
+            settings += '\nearlyWindowControl = false\n'
+        }
+        config.setText(settings, 'UTF-8')
+    }
+}
+tasks.matching { it.name in ['runClientHeadless', 'prepareClientHeadlessRun'] }.configureEach {
+    dependsOn prepareHeadlessClient
+}
+
 neoForge {
     version = project.neo_version_26_3
 
@@ -344,6 +388,25 @@ neoForge {
                 systemProperty 'kasuga.graphicsSmoke', graphicsSmoke
             }
         }
+        clientHeadless {
+            client()
+            gameDirectory = headlessDirectory
+            boolean linux = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('linux')
+            String host = providers.gradleProperty('kasugaHeadlessBackend').getOrElse(linux ? 'offscreen' : 'hidden')
+            String graphics = providers.gradleProperty('kasugaHeadlessGraphics').getOrElse(host == 'offscreen' ? 'opengl' : 'vulkan')
+            if (!(host in ['hidden', 'offscreen']) || !(graphics in ['vulkan', 'opengl'])) {
+                throw new GradleException("Unsupported headless host or graphics backend: ${host}, ${graphics}")
+            }
+            systemProperty 'kasuga.headless', host
+            systemProperty 'kasuga.headless.fps', providers.gradleProperty('kasugaHeadlessFps').getOrElse('60')
+            systemProperty 'java.awt.headless', 'true'
+            programArguments.addAll '--graphicsBackend', graphics.toUpperCase(Locale.ROOT)
+            if (headlessTest) systemProperty 'kasuga.testHeadless', graphics
+            def quickPlayWorld = providers.gradleProperty('kasugaQuickPlayWorld')
+            if (quickPlayWorld.isPresent()) programArguments.addAll '--quickPlaySingleplayer', quickPlayWorld.get()
+            def serverAddress = providers.gradleProperty('kasugaHeadlessServer')
+            if (serverAddress.isPresent()) programArguments.addAll '--quickPlayMultiplayer', serverAddress.get()
+        }
         server {
             server()
             gameDirectory = file('run/26.3-server')
@@ -355,7 +418,8 @@ neoForge {
         "${mod_id}" {
             sourceSet sourceSets.main
             sourceSet sourceSets.blackHoleDemo
-            if (!providers.gradleProperty('kasugaGraphicsSmoke').getOrElse('').isEmpty()) {
+            sourceSet sourceSets.nebulaDemo
+            if (headlessTest || !providers.gradleProperty('kasugaGraphicsSmoke').getOrElse('').isEmpty()) {
                 sourceSet sourceSets.contentTesting
             }
         }

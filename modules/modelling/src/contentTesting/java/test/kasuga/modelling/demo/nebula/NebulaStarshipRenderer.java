@@ -29,6 +29,7 @@ final class NebulaStarshipRenderer {
     private static final String MTL = "assets/kasuga_demo/models/constitution_starship.mtl";
     private static final String VERTEX = "assets/kasuga_demo/shaders/core/nebula_starship.vert";
     private static final String FRAGMENT = "assets/kasuga_demo/shaders/core/nebula_starship.frag";
+    private static final String SHADER_INCLUDE = "assets/kasuga_demo/shaders/include/";
     private static final int FLOATS_PER_VERTEX = 16;
     private final Matrix4f viewProjection = new Matrix4f();
     private final Matrix4f view = new Matrix4f();
@@ -67,7 +68,8 @@ final class NebulaStarshipRenderer {
         vertexCount = mesh.vertexCount;
         minX = mesh.minX; minY = mesh.minY; minZ = mesh.minZ;
         maxX = mesh.maxX; maxY = mesh.maxY; maxZ = mesh.maxZ;
-        program = GlslProgram.link(readResource(VERTEX), readResource(FRAGMENT));
+        program = GlslProgram.link(readResource(VERTEX) + readResource(SHADER_INCLUDE + "nebula_starship_vertex.glsl"),
+                readResource(FRAGMENT) + readResource(SHADER_INCLUDE + "nebula_starship_fragment.glsl"));
         var material = mesh.materials().get("hull_mid");
         if (material == null) throw new IllegalStateException("Starship hull material is missing");
         albedoMap = texture(modelTexture(material.getMap_Kd()), true);
@@ -229,25 +231,13 @@ final class NebulaStarshipRenderer {
 
     static MeshData parseMesh(String objSource, String mtlSource) {
         var mesh = lib.kasuga.rendering.models.mc.typo.KsgObjLoader.loadFlatMesh(
-                objSource, mtlSource, NebulaStarshipRenderer::kind
+                objSource, mtlSource, NebulaTextureData::materialKind
         );
         if (mesh.triangleCount() < 1000) {
             throw new IllegalStateException("Starship OBJ is unexpectedly sparse");
         }
         return new MeshData(mesh.vertices(), mesh.triangleCount(), mesh.vertexCount(),
                 mesh.minX(), mesh.minY(), mesh.minZ(), mesh.maxX(), mesh.maxY(), mesh.maxZ(), mesh.materials());
-    }
-
-    private static float kind(String name) {
-        if (name.startsWith("hull_")) return 0;
-        if (name.startsWith("trim_")) return 1;
-        if (name.equals("coil_blue")) return 2;
-        if (name.equals("collector_red")) return 3;
-        if (name.startsWith("window_")) return 4;
-        if (name.startsWith("hangar_")) return 5;
-        if (name.startsWith("deflector_")) return 6;
-        if (name.equals("impulse_red")) return 7;
-        return 0;
     }
 
     record MeshData(float[] vertices, int triangleCount, int vertexCount,
