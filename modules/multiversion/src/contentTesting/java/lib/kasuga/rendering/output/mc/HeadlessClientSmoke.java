@@ -43,7 +43,7 @@ public final class HeadlessClientSmoke {
     private static int delivered;
     private static RuntimeException failure;
     private static FrameOutputRouter<GpuTextureView>.Registration output;
-    private static CompletableFuture<Void> formatReadback;
+    private static CompletableFuture<Void> offscreenChecks;
 
     private HeadlessClientSmoke() {}
 
@@ -77,11 +77,11 @@ public final class HeadlessClientSmoke {
                 }
             });
             output = MinecraftFrameOutputs.open(FrameOutputMode.OFFSCREEN_ONLY, HeadlessClientSmoke::read);
-            formatReadback = FrameOutputFormatSmoke.verify();
+            offscreenChecks = CompletableFuture.allOf(FrameOutputFormatSmoke.verify(), IndexedDrawBatchSmoke.verify());
             return;
         }
-        if (output == null || !formatReadback.isDone()) return;
-        formatReadback.join();
+        if (output == null || !offscreenChecks.isDone()) return;
+        offscreenChecks.join();
         if (output.isClosed() || !sampled || delivered < 4 || client.level.getGameTime() <= initialTick) return;
         checkPlatform(client);
         output.close();

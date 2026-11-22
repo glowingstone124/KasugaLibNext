@@ -134,6 +134,11 @@ jobs:
               "-PkasugaHeadlessGraphics=$backend" "-PkasugaClientDirectory=run/26.3-headless-$backend" --console=plain | tee "$log"
             grep -Fq "KASUGA_HEADLESS_PASS graphics=$backend driver=offscreen hidden,unpresented,world-ticks,final-gui-readback,hdr-format-switch" "$log"
             grep -Fq 'KASUGA_ITEM_MODEL_PASS resource-model,final-gui-readback' "$log"
+            if [[ $backend == vulkan ]]; then
+              grep -Fq 'KASUGA_INDEXED_DRAW_PASS backend=Vulkan path=indirect first-index,base-vertex,order,pixels' "$log"
+            else
+              grep -Fq 'KASUGA_INDEXED_DRAW_PASS backend=OpenGL path=' "$log"
+            fi
           done
 
   package-26-3-universal:
