@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "package": "lib.kasuga.testing.vulkan.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": ["VulkanFeatureReportMixin", "VulkanCreateDeviceFaultMixin"],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

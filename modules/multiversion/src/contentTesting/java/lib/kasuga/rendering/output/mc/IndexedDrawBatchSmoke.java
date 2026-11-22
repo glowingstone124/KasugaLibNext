@@ -15,7 +15,10 @@ import com.mojang.renderpearl.api.pipeline.IndexType;
 import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
 import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import lib.kasuga.KasugaLib;
+import lib.kasuga.core.rendering.mixin.FrontendGpuDeviceAccess;
+import lib.kasuga.core.rendering.mixin.VulkanDeviceFeaturesAccess;
 import lib.kasuga.rendering.batch.IndexedDrawBatch;
+import lib.kasuga.rendering.batch.VulkanIndexedVisibility;
 import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -49,6 +52,12 @@ public final class IndexedDrawBatchSmoke {
     }
 
     static CompletableFuture<Void> verify() {
+        if (Boolean.getBoolean("kasuga.testVulkanRetry")) {
+            FrontendGpuDeviceAccess frontend = (FrontendGpuDeviceAccess) RenderSystem.getDevice();
+            VulkanDeviceFeaturesAccess vulkan = (VulkanDeviceFeaturesAccess) frontend.kasuga$backend();
+            require(!vulkan.kasuga$enabledFeatures().contains(VulkanIndexedVisibility.indirectCountFeature()),
+                    "RenderPearl retained drawIndirectCount in the enabled features after retry");
+        }
         return CompletableFuture.allOf(run(Mode.DRAW), run(Mode.VISIBILITY), run(Mode.EMPTY),
                 run(Mode.FORCED_FIXED), run(Mode.FORCED_CPU));
     }
@@ -79,6 +88,10 @@ public final class IndexedDrawBatchSmoke {
                 if (mode == Mode.DRAW || mode == Mode.FORCED_CPU || !"Vulkan".equals(device.backendName())
                         || Boolean.getBoolean("kasuga.disableVulkanCompute")) {
                     require(!batch.usesGpuVisibility(), "Indexed draw selected compute when it should use the CPU");
+                }
+                if (Boolean.getBoolean("kasuga.testVulkanRetry") && (mode == Mode.VISIBILITY || mode == Mode.EMPTY)) {
+                    require(batch.usesGpuVisibility() && !batch.usesIndirectCount(),
+                            "Vulkan device retry did not select fixed-count GPU visibility");
                 }
                 if (mode == Mode.FORCED_FIXED) {
                     require(!batch.usesIndirectCount(), "Indexed draw selected counted submission while disabled");

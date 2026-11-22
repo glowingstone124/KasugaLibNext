@@ -1,0 +1,11 @@
+modLoader="javafml"
+loaderVersion="[1,)"
+license="Apache-2.0"
+
+[[mods]]
+modId="kasuga_vulkan_retry_test"
+version="1"
+displayName="Kasuga Vulkan device retry test"
+
+[[mixins]]
+config="kasuga_vulkan_retry_test.mixins.json"

@@ -146,6 +146,17 @@ jobs:
             fi
           done
 
+          log="$RUNNER_TEMP/kasuga-headless-vulkan-retry.log"
+          scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true \
+            -PkasugaHeadlessGraphics=vulkan -PkasugaTestVulkanRetry=true \
+            -PkasugaClientDirectory=run/26.3-headless-vulkan-retry --console=plain | tee "$log"
+          grep -Fq 'KASUGA_VULKAN_RETRY_REPORT drawIndirectCount=true' "$log"
+          grep -Fq 'KASUGA_VULKAN_RETRY_INJECT vkCreateDevice=VK_ERROR_FEATURE_NOT_PRESENT' "$log"
+          grep -Fq 'KASUGA_VULKAN_RETRY_DEVICE_PASS vkCreateDevice=VK_SUCCESS drawIndirectCount=false' "$log"
+          grep -Fq 'KASUGA_INDEXED_VISIBILITY_PASS backend=Vulkan mode=VISIBILITY path=gpu-fixed' "$log"
+          grep -Fq 'KASUGA_INDEXED_VISIBILITY_PASS backend=Vulkan mode=EMPTY path=gpu-fixed' "$log"
+          grep -Fq 'KASUGA_HEADLESS_PASS graphics=vulkan driver=offscreen' "$log"
+
   package-26-3-universal:
     needs: [build, build-26-3]
     runs-on: ubuntu-latest

@@ -288,6 +288,10 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
     }
+    vulkanRetryTest {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath
+    }
     contentTesting {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + sourceSets.blackHoleDemo.output + sourceSets.nebulaDemo.output
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath + sourceSets.blackHoleDemo.output + sourceSets.nebulaDemo.output
@@ -440,6 +444,7 @@ dependencies {
 
 def headlessDirectory = file(providers.gradleProperty('kasugaClientDirectory').getOrElse('run/26.3-headless'))
 def headlessTest = providers.gradleProperty('kasugaTestHeadless').getOrElse('false').toBoolean()
+def vulkanRetryTest = providers.gradleProperty('kasugaTestVulkanRetry').getOrElse('false').toBoolean()
 def prepareHeadlessClient = tasks.register('prepareHeadlessClient') {
     doLast {
         File config = new File(headlessDirectory, 'config/fml.toml')
@@ -515,6 +520,12 @@ neoForge {
             systemProperty 'java.awt.headless', 'true'
             programArguments.addAll '--graphicsBackend', graphics.toUpperCase(Locale.ROOT)
             if (headlessTest) systemProperty 'kasuga.testHeadless', graphics
+            if (vulkanRetryTest) {
+                if (!headlessTest || graphics != 'vulkan') {
+                    throw new GradleException('kasugaTestVulkanRetry requires the Vulkan headless smoke test')
+                }
+                systemProperty 'kasuga.testVulkanRetry', 'true'
+            }
             if (providers.gradleProperty('kasugaTestNebula').getOrElse('false').toBoolean()) {
                 systemProperty 'kasuga.testNebula', 'true'
                 [
@@ -544,6 +555,11 @@ neoForge {
     }
 
     mods {
+        if (vulkanRetryTest) {
+            kasuga_vulkan_retry_test {
+                sourceSet sourceSets.vulkanRetryTest
+            }
+        }
         "${mod_id}" {
             sourceSet sourceSets.main
             sourceSet sourceSets.blackHoleDemo
