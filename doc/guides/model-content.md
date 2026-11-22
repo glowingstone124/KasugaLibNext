@@ -1,5 +1,12 @@
 # 内容接入：方块与物品的模型资源
 
+## Minecraft 26.3
+
+在 `assets/<namespace>/items/<item_path>.json` 中用 `minecraft:special` 引用 `kasuga_lib:model`。
+原版 `base` 模型提供各物品展示位置的变换。配置示例见 [ItemModelRenderer](../reference/item-model-renderers.en.md#minecraft-263)。
+
+## Minecraft 1.21.1
+
 本文只回答一件事：**当一个方块或物品交给本项目的渲染管线来画时，`blockstate` 与原版 `models/item/*.json` 应该怎么写。**
 
 接口签名见 [ItemModelRenderers](../reference/item-model-renderers.md)；世界内方块如何绑定状态机/模型见 [FSM](../reference/fsm.md) 与 [ProxyHost 内容接入](../reference/fsm.md)。

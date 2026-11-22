@@ -1,5 +1,29 @@
 # ItemModelRenderers / ItemModelRenderer
 
+## Minecraft 26.3
+
+Use the native special item model in `assets/<namespace>/items/<item_path>.json`.
+
+```json
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "minecraft:block/stone",
+    "model": {
+      "type": "kasuga_lib:model",
+      "model": "example:models/widget.glb"
+    }
+  }
+}
+```
+
+The base supplies display transforms, lighting and the particle sprite. The inner `model` identifies a Kasuga model
+resource. For an MMD ZIP, add `model_name` to select an entry by its archive path. The native item renderer
+uses the same geometry in menus, in hand and for dropped items. Resource reload releases the cached model
+and loads the updated resource on its next draw.
+
+## Minecraft 1.21.1
+
 The item-side entry of the model system: maps an `Item` to a pipeline model and provides a `BlockEntityWithoutLevelRenderer` (BEWLR) so the GUI, hand and dropped items use this project's renderer.
 
 Package: `lib.kasuga.rendering.models.mc.api.item`

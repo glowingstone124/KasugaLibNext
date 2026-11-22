@@ -1,0 +1,10 @@
+{
+  "model": {
+    "type": "minecraft:special",
+    "base": "minecraft:item/stick",
+    "model": {
+      "type": "kasuga_lib:model",
+      "model": "kasuga_lib:models/smoke/triangle.gltf"
+    }
+  }
+}

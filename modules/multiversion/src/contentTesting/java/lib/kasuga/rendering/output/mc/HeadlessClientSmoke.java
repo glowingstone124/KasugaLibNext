@@ -12,8 +12,12 @@ import lib.kasuga.rendering.output.OutputFrame;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.Difficulty;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.WorldDataConfiguration;
@@ -62,11 +66,14 @@ public final class HeadlessClientSmoke {
         if (output == null && client.gui.screen() == null) {
             checkPlatform(client);
             initialTick = client.level.getGameTime();
+            ItemStack item = new ItemStack(Items.STICK);
+            item.set(DataComponents.ITEM_MODEL, Identifier.parse("kasuga_lib:native_smoke_item"));
             client.gui.setScreen(new Screen(Component.literal("Headless frame smoke")) {
                 @Override public boolean isPauseScreen() { return false; }
                 @Override public void extractBackground(GuiGraphicsExtractor graphics, int x, int y, float partialTick) {}
                 @Override public void extractRenderState(GuiGraphicsExtractor graphics, int x, int y, float partialTick) {
                     graphics.fill(0, 0, width, height, 0xffb42c65);
+                    graphics.item(item, width / 2 - 8, height / 2 - 8);
                 }
             });
             output = MinecraftFrameOutputs.open(FrameOutputMode.OFFSCREEN_ONLY, HeadlessClientSmoke::read);
@@ -78,6 +85,7 @@ public final class HeadlessClientSmoke {
         if (output.isClosed() || !sampled || delivered < 4 || client.level.getGameTime() <= initialTick) return;
         checkPlatform(client);
         output.close();
+        LogUtils.getLogger().info("KASUGA_ITEM_MODEL_PASS resource-model,final-gui-readback");
         LogUtils.getLogger().info("KASUGA_HEADLESS_PASS graphics={} driver={} hidden,unpresented,world-ticks,final-gui-readback,hdr-format-switch",
                 GRAPHICS, SDLVideo.SDL_GetCurrentVideoDriver());
         client.stop();
@@ -97,22 +105,30 @@ public final class HeadlessClientSmoke {
         delivered++;
         if (pending) return;
         pending = true;
-        GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "Headless frame pixel",
-                GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, 4);
+        int size = Math.min(64, Math.min(frame.width(), frame.height()));
+        GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "Headless GUI item and backdrop",
+                GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, size * size * 4);
         try {
             RenderSystem.getDevice().createCommandEncoder().copyTextureToBuffer(frame.resource().texture(), buffer, 0, () -> {
                 try (buffer; GpuBufferSlice.MappedView mapped = buffer.map(true, false)) {
-                    int red = mapped.data().get(0) & 255;
-                    int green = mapped.data().get(1) & 255;
-                    int blue = mapped.data().get(2) & 255;
-                    if (red != 180 || green != 44 || blue != 101) {
-                        throw new IllegalStateException("Headless framebuffer did not contain the composed GUI color");
+                    int backdrop = 0;
+                    int item = 0;
+                    for (int offset = 0; offset < size * size * 4; offset += 4) {
+                        int red = mapped.data().get(offset) & 255;
+                        int green = mapped.data().get(offset + 1) & 255;
+                        int blue = mapped.data().get(offset + 2) & 255;
+                        if (red == 180 && green == 44 && blue == 101) backdrop++;
+                        if (red < 20 && green > 90 && blue > 90) item++;
+                    }
+                    if (backdrop < 16 || item < 16) {
+                        throw new IllegalStateException("Missing composed GUI backdrop or resource-backed item: "
+                                + backdrop + " backdrop pixels, " + item + " item pixels");
                     }
                     sampled = true;
                 } catch (RuntimeException error) {
                     failure = error;
                 }
-            }, 0, frame.width() / 2, frame.height() / 2, 1, 1);
+            }, 0, (frame.width() - size) / 2, (frame.height() - size) / 2, size, size);
         } catch (RuntimeException error) {
             buffer.close();
             failure = error;

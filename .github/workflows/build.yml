@@ -133,6 +133,7 @@ jobs:
             scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true \
               "-PkasugaHeadlessGraphics=$backend" "-PkasugaClientDirectory=run/26.3-headless-$backend" --console=plain | tee "$log"
             grep -Fq "KASUGA_HEADLESS_PASS graphics=$backend driver=offscreen hidden,unpresented,world-ticks,final-gui-readback,hdr-format-switch" "$log"
+            grep -Fq 'KASUGA_ITEM_MODEL_PASS resource-model,final-gui-readback' "$log"
           done
 
   package-26-3-universal:
