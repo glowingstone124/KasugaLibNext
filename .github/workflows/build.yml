@@ -119,6 +119,17 @@ jobs:
             external/uip/ldlib/build/26.3/libs/kasuga-ldlib-*.jar
             external/uip/ldlib-compose/build/26.3/libs/kasuga-ldlib-compose-*.jar
           if-no-files-found: error
+      - name: Verify Minecraft 26.3 headless rendering on Linux
+        env:
+          ALSOFT_DRIVERS: 'null'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl1 libgl1-mesa-dri libopenal1
+          scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true -PkasugaHeadlessGraphics=opengl --console=plain | tee "$RUNNER_TEMP/kasuga-headless.log"
+          grep -Fq 'KASUGA_HEADLESS_PASS graphics=opengl driver=offscreen' "$RUNNER_TEMP/kasuga-headless.log"
 
   package-26-3-universal:
     needs: [build, build-26-3]
