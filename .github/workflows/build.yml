@@ -127,9 +127,13 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libegl1 libgl1-mesa-dri libopenal1
-          scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true -PkasugaHeadlessGraphics=opengl --console=plain | tee "$RUNNER_TEMP/kasuga-headless.log"
-          grep -Fq 'KASUGA_HEADLESS_PASS graphics=opengl driver=offscreen' "$RUNNER_TEMP/kasuga-headless.log"
+          sudo apt-get install -y -qq libegl1 libgl1-mesa-dri libopenal1 mesa-vulkan-drivers
+          for backend in opengl vulkan; do
+            log="$RUNNER_TEMP/kasuga-headless-$backend.log"
+            scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true \
+              "-PkasugaHeadlessGraphics=$backend" "-PkasugaClientDirectory=run/26.3-headless-$backend" --console=plain | tee "$log"
+            grep -Fq "KASUGA_HEADLESS_PASS graphics=$backend driver=offscreen" "$log"
+          done
 
   package-26-3-universal:
     needs: [build, build-26-3]
