@@ -21,4 +21,14 @@ public interface FrameOutputTarget<T> extends AutoCloseable {
             return captureInto(destination -> blitter.draw(width, height), width, height);
         }
     }
+
+    /** Allocates the snapshot using the format of a backend-owned source resource. */
+    interface Copying<T> extends FrameOutputTarget<T> {
+        T captureFrom(T source, int width, int height);
+
+        @Override
+        default T capture(FrameBlitter blitter, int width, int height) {
+            throw new UnsupportedOperationException("This frame target requires a source resource");
+        }
+    }
 }

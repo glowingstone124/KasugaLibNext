@@ -42,20 +42,11 @@ public final class MinecraftFrameOutputs {
         return ROUTER.register(viewId, mode, consumer);
     }
 
-    /** Copy the completed RGBA8 view. Call after closing any active render pass. */
+    /** Copies the completed color attachment in its original format after all render passes close. */
     public static FrameOutputRouter.Delivery publish(String viewId, RenderTarget source) {
         RenderSystem.assertOnRenderThread();
         Objects.requireNonNull(source, "source");
-        int width = source.width;
-        int height = source.height;
-        FrameOutputRouter.Delivery delivery = ROUTER.publishInto(viewId, width, height, destination -> {
-            GpuTexture color = Objects.requireNonNull(source.getColorTexture(), "Source color texture");
-            if (color.getFormat() != GpuFormat.RGBA8_UNORM) {
-                throw new IllegalArgumentException("Frame output requires an RGBA8_UNORM source");
-            }
-            RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
-                    color, destination.texture(), 0, 0, 0, 0, 0, width, height);
-        });
+        FrameOutputRouter.Delivery delivery = ROUTER.publishCopy(viewId, source.width, source.height, source::getColorTextureView);
         for (Exception failure : delivery.failures()) {
             LOGGER.error("Frame output failed and was detached for view {}", viewId, failure);
         }
@@ -73,12 +64,13 @@ public final class MinecraftFrameOutputs {
     public static GpuTextureView blankPresentation(GpuSurface surface, GpuTextureView fallback) {
         GpuSurface.Configuration size = surface.currentConfiguration().orElse(null);
         if (size == null) return fallback;
-        if (blank != null && blank.width == size.width() && blank.height == size.height()) {
+        GpuFormat format = fallback.texture().getFormat();
+        if (matches(blank, size.width(), size.height(), format)) {
             return blank.getColorTextureView();
         }
         TextureTarget replacement = null;
         try {
-            replacement = newTarget("Kasuga exclusive output", size.width(), size.height());
+            replacement = new TextureTarget("Kasuga exclusive output", size.width(), size.height(), format, null);
             RenderSystem.getDevice().createCommandEncoder().clearColorTexture(
                     replacement.getColorTexture(), new Vector4f(0, 0, 0, 1));
         } catch (RuntimeException failure) {
@@ -106,23 +98,26 @@ public final class MinecraftFrameOutputs {
         blank = null;
     }
 
-    private static TextureTarget newTarget(String label, int width, int height) {
-        return new TextureTarget(label, width, height, GpuFormat.RGBA8_UNORM, null);
+    private static boolean matches(TextureTarget target, int width, int height, GpuFormat format) {
+        return target != null && target.width == width && target.height == height
+                && target.getColorTexture().getFormat() == format;
     }
 
-    private static final class Snapshot implements FrameOutputTarget.Writable<GpuTextureView> {
+    private static final class Snapshot implements FrameOutputTarget.Copying<GpuTextureView> {
         private TextureTarget target;
 
         @Override
-        public GpuTextureView captureInto(Consumer<? super GpuTextureView> writer, int width, int height) {
-            if (target == null || target.width != width || target.height != height) {
-                TextureTarget replacement = newTarget("Kasuga frame output", width, height);
+        public GpuTextureView captureFrom(GpuTextureView source, int width, int height) {
+            GpuTexture color = source.texture();
+            GpuFormat format = color.getFormat();
+            if (!matches(target, width, height, format)) {
+                TextureTarget replacement = new TextureTarget("Kasuga frame output", width, height, format, null);
                 close();
                 target = replacement;
             }
-            GpuTextureView view = target.getColorTextureView();
-            writer.accept(view);
-            return view;
+            RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(
+                    color, target.getColorTexture(), 0, 0, 0, 0, 0, width, height);
+            return target.getColorTextureView();
         }
 
         @Override

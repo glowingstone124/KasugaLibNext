@@ -84,6 +84,17 @@ public final class FrameOutputRouter<T> implements AutoCloseable {
         });
     }
 
+    /** Publishes a copied source, consulting it only when the view has consumers. */
+    public Delivery publishCopy(String viewId, int width, int height, Supplier<? extends T> source) {
+        Objects.requireNonNull(source, "source");
+        return publishFrame(viewId, width, height, target -> {
+            if (!(target instanceof FrameOutputTarget.Copying<T> copying)) {
+                throw new IllegalStateException("A frame source requires a copying target");
+            }
+            return copying.captureFrom(Objects.requireNonNull(source.get(), "frame source"), width, height);
+        });
+    }
+
     private Delivery publishFrame(String viewId, int width, int height, Function<FrameOutputTarget<T>, T> capture) {
         checkThread.run();
         if (closed) throw new IllegalStateException("Frame output router is closed");

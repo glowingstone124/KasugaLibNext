@@ -45,6 +45,7 @@ public final class FrameOutputSmoke {
     private static int closedWindowId;
     private static boolean sampled;
     private static boolean fitted;
+    private static boolean hdrCopied;
     private static boolean finished;
     private static RuntimeException failure;
     private static int frames;
@@ -119,7 +120,7 @@ public final class FrameOutputSmoke {
         }
         require(!mirror.isClosed() && !exclusive.isClosed(), "Frame router detached a smoke subscriber");
         verifyPlayerCamera(client);
-        if (!sampled || !fitted || exclusiveFrames < 3 || !verifyPreviewWindows(client)) return;
+        if (!sampled || !fitted || !hdrCopied || exclusiveFrames < 3 || !verifyPreviewWindows(client)) return;
         require(playerCamera.state() == CameraState.CLOSED, "Player camera did not finish the lifecycle probe");
         exclusive.close();
         require(!current.resource().isClosed(), "Closing one consumer retired a shared snapshot");
@@ -127,7 +128,7 @@ public final class FrameOutputSmoke {
         require(current.resource().isClosed() && !MinecraftFrameOutputs.hasOutputs(MinecraftFrameOutputs.MAIN_VIEW),
                 "Last subscription did not retire the output snapshot");
         // This frame presents the GUI again, and the client shuts down on the following tick.
-        LogUtils.getLogger().info("KASUGA_FRAME_OUTPUT_PASS final-gui,shared,exclusive,retired,custom-view,resize");
+        LogUtils.getLogger().info("KASUGA_FRAME_OUTPUT_PASS final-gui,shared,exclusive,retired,custom-view,resize,hdr,format-switch");
         finished = true;
         client.stop();
     }
@@ -285,6 +286,8 @@ public final class FrameOutputSmoke {
     private static void verifyCustomView() throws Exception {
         String id = "kasuga:smoke";
         TextureTarget source = new TextureTarget("Frame output test source", 8, 10, GpuFormat.RGBA8_UNORM, null);
+        TextureTarget halfFloat = new TextureTarget("Frame output half float", 12, 14, GpuFormat.RGBA16_FLOAT, null);
+        TextureTarget fullFloat = new TextureTarget("Frame output full float", 12, 14, GpuFormat.RGBA32_FLOAT, null);
         try (FrameOutputRouter<GpuTextureView>.Registration custom = MinecraftFrameOutputs.open(id, FrameOutputMode.MIRROR, frame -> {})) {
             clear(source);
             require(MinecraftFrameOutputs.publish(id, source).delivered() == 1, "Custom view was not delivered");
@@ -296,8 +299,42 @@ public final class FrameOutputSmoke {
             require(resized.width() == 12 && resized.height() == 14 && resized.frameNumber() == first.frameNumber() + 1
                             && resized.resource() != first.resource() && first.resource().isClosed(),
                     "Resizing did not retire the old custom view snapshot");
+            clear(halfFloat);
+            require(MinecraftFrameOutputs.publish(id, halfFloat).delivered() == 1, "Half-float view was not delivered");
+            GpuTextureView halfSnapshot = custom.latest().orElseThrow().resource();
+            require(resized.resource().isClosed() && halfSnapshot.texture().getFormat() == GpuFormat.RGBA16_FLOAT,
+                    "The same-size format switch did not replace the previous snapshot");
+            RenderSystem.getDevice().createCommandEncoder().clearColorTexture(fullFloat.getColorTexture(),
+                    new Vector4f(2.5f, .25f, .75f, 1f));
+            require(MinecraftFrameOutputs.publish(id, fullFloat).delivered() == 1, "Full-float view was not delivered");
+            GpuTextureView hdr = custom.latest().orElseThrow().resource();
+            require(halfSnapshot.isClosed() && hdr.texture().getFormat() == GpuFormat.RGBA32_FLOAT,
+                    "The frame output did not preserve full-float storage");
+            readHdrPixel(hdr);
         } finally {
             source.destroyBuffers();
+            halfFloat.destroyBuffers();
+            fullFloat.destroyBuffers();
+        }
+    }
+
+    private static void readHdrPixel(GpuTextureView source) {
+        GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "Frame output HDR pixel",
+                GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, 16);
+        try {
+            RenderSystem.getDevice().createCommandEncoder().copyTextureToBuffer(source.texture(), buffer, 0, () -> {
+                try (buffer; GpuBufferSlice.MappedView mapped = buffer.map(true, false)) {
+                    require(mapped.data().getFloat(0) == 2.5f && mapped.data().getFloat(4) == .25f
+                                    && mapped.data().getFloat(8) == .75f && mapped.data().getFloat(12) == 1f,
+                            "The HDR snapshot changed the source pixel");
+                    hdrCopied = true;
+                } catch (RuntimeException error) {
+                    failure = error;
+                }
+            }, 0, 0, 0, 1, 1);
+        } catch (RuntimeException error) {
+            buffer.close();
+            throw error;
         }
     }
 
