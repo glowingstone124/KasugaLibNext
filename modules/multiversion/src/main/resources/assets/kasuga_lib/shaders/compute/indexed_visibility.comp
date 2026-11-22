@@ -1,0 +1,27 @@
+#version 450
+
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) buffer Batch {
+    uint words[];
+};
+layout(push_constant) uniform Volume {
+    vec4 planes[6];
+    uint candidateCount;
+};
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index >= candidateCount) return;
+
+    uint bounds = 5u * candidateCount + 4u * index;
+    vec3 center = vec3(uintBitsToFloat(words[bounds]), uintBitsToFloat(words[bounds + 1u]),
+                       uintBitsToFloat(words[bounds + 2u]));
+    float radius = uintBitsToFloat(words[bounds + 3u]);
+    for (int plane = 0; plane < 6; ++plane) {
+        if (dot(planes[plane].xyz, center) + planes[plane].w < -radius - 0.0001) {
+            // Set instanceCount to zero. Keep the remaining draws in their original order.
+            words[5u * index + 1u] = 0u;
+            return;
+        }
+    }
+}

@@ -136,8 +136,11 @@ jobs:
             grep -Fq 'KASUGA_ITEM_MODEL_PASS resource-model,final-gui-readback' "$log"
             if [[ $backend == vulkan ]]; then
               grep -Fq 'KASUGA_INDEXED_DRAW_PASS backend=Vulkan path=indirect first-index,base-vertex,order,pixels' "$log"
+              grep -Fq 'KASUGA_INDEXED_VISIBILITY_PASS backend=Vulkan mode=VISIBILITY path=gpu' "$log"
+              grep -Fq 'KASUGA_INDEXED_VISIBILITY_PASS backend=Vulkan mode=FORCED_CPU path=cpu' "$log"
             else
               grep -Fq 'KASUGA_INDEXED_DRAW_PASS backend=OpenGL path=' "$log"
+              grep -Fq 'KASUGA_INDEXED_VISIBILITY_PASS backend=OpenGL mode=VISIBILITY path=cpu' "$log"
             fi
           done
 

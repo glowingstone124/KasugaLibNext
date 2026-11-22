@@ -21,6 +21,7 @@
     "GuiWindowStateAccess",
     "HeadlessMinecraftMixin",
     "MinecraftFrameOutputMixin",
+    "VulkanDeviceCloseMixin",
     "WorldUiGameRendererMixin",
     "WorldUiKeyboardMixin",
     "WorldUiTextInputMixin"

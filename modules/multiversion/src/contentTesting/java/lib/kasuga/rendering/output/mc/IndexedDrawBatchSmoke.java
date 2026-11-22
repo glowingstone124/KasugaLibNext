@@ -25,6 +25,7 @@ import org.joml.Vector4f;
 import org.lwjgl.system.MemoryStack;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -48,6 +49,10 @@ public final class IndexedDrawBatchSmoke {
     }
 
     static CompletableFuture<Void> verify() {
+        return CompletableFuture.allOf(run(Mode.DRAW), run(Mode.VISIBILITY), run(Mode.FORCED_CPU));
+    }
+
+    private static CompletableFuture<Void> run(Mode mode) {
         TextureTarget target = new TextureTarget("Kasuga indexed draw smoke", SIZE, SIZE, GpuFormat.RGBA8_UNORM, null);
         CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         DeviceInfo device = RenderSystem.getDevice().getDeviceInfo();
@@ -65,10 +70,14 @@ public final class IndexedDrawBatchSmoke {
             indices.flip();
             try (GpuBuffer vertex = RenderSystem.getDevice().createBuffer(() -> "Indexed draw smoke vertices", GpuBuffer.USAGE_VERTEX, vertices);
                  GpuBuffer index = RenderSystem.getDevice().createBuffer(() -> "Indexed draw smoke indices", GpuBuffer.USAGE_INDEX, indices)) {
-                IndexedDrawBatch batch = IndexedDrawBatch.prepare(encoder, draws);
+                IndexedDrawBatch batch = prepare(encoder, draws, mode);
                 boolean supportsMultiDraw = device.features().drawIndirect() && device.features().multiDrawIndirect()
                         && device.limits().maxDrawIndirectDrawCount() > 1;
                 require(batch.usesIndirect() == supportsMultiDraw, "Indexed draw selected the wrong submission path");
+                if (mode != Mode.VISIBILITY || !"Vulkan".equals(device.backendName())
+                        || Boolean.getBoolean("kasuga.disableVulkanCompute")) {
+                    require(!batch.usesGpuVisibility(), "Indexed draw selected compute when it should use the CPU");
+                }
                 try (RenderPass pass = encoder.createRenderPass(() -> "Indexed draw smoke", target.getColorTextureView(),
                         Optional.of(new Vector4f(0, 0, 0, 1)))) {
                     pass.setPipeline(RenderSystem.getCompiledPipeline(PIPELINE));
@@ -76,12 +85,33 @@ public final class IndexedDrawBatchSmoke {
                     pass.setIndexBuffer(index, IndexType.SHORT);
                     batch.draw(pass);
                 }
-                read(encoder, target, device.backendName(), batch.usesIndirect(), result);
+                read(encoder, target, device.backendName(), batch, mode, result);
             }
         } finally {
             target.destroyBuffers();
         }
         return result;
+    }
+
+    private static IndexedDrawBatch prepare(CommandEncoder encoder, List<IndexedDrawBatch.Draw> draws, Mode mode) {
+        if (mode == Mode.DRAW) return IndexedDrawBatch.prepare(encoder, draws);
+        IndexedDrawBatch.Candidate hidden = new IndexedDrawBatch.Candidate(draws.getFirst(), -2f, 0, 0, .5f);
+        List<IndexedDrawBatch.Candidate> candidates = new ArrayList<>();
+        candidates.add(new IndexedDrawBatch.Candidate(draws.getFirst(), -.5f, 0, 0, .5f));
+        // An escaped hidden command would overpaint the green quad at the overlap pixel.
+        for (int i = 0; i < 63; i++) candidates.add(hidden);
+        candidates.add(new IndexedDrawBatch.Candidate(draws.getLast(), .5f, 0, 0, .5f));
+        candidates.add(hidden);
+        List<Vector4f> planes = List.of(new Vector4f(1, 0, 0, 0));
+        if (mode != Mode.FORCED_CPU) return IndexedDrawBatch.prepareVisible(encoder, candidates, planes);
+        String key = "kasuga.disableVulkanCompute";
+        String original = System.setProperty(key, "true");
+        try {
+            return IndexedDrawBatch.prepareVisible(encoder, candidates, planes);
+        } finally {
+            if (original == null) System.clearProperty(key);
+            else System.setProperty(key, original);
+        }
     }
 
     private static void quad(ByteBuffer buffer, float left, float right, int red, int green) {
@@ -95,7 +125,8 @@ public final class IndexedDrawBatchSmoke {
         buffer.putFloat(x).putFloat(y).putFloat(.5f).put((byte) red).put((byte) green).put((byte) 0).put((byte) 255);
     }
 
-    private static void read(CommandEncoder encoder, TextureTarget target, String backend, boolean indirect, CompletableFuture<Void> result) {
+    private static void read(CommandEncoder encoder, TextureTarget target, String backend, IndexedDrawBatch batch,
+                             Mode mode, CompletableFuture<Void> result) {
         GpuBuffer buffer = RenderSystem.getDevice().createBuffer(() -> "Indexed draw smoke pixels",
                 GpuBuffer.USAGE_MAP_READ | GpuBuffer.USAGE_COPY_DST, SIZE * SIZE * 4);
         try {
@@ -109,8 +140,13 @@ public final class IndexedDrawBatchSmoke {
                     result.completeExceptionally(error);
                     return;
                 }
-                LogUtils.getLogger().info("KASUGA_INDEXED_DRAW_PASS backend={} path={} first-index,base-vertex,order,pixels",
-                        backend, indirect ? "indirect" : "direct");
+                if (mode == Mode.DRAW) {
+                    LogUtils.getLogger().info("KASUGA_INDEXED_DRAW_PASS backend={} path={} first-index,base-vertex,order,pixels",
+                            backend, batch.usesIndirect() ? "indirect" : "direct");
+                } else {
+                    LogUtils.getLogger().info("KASUGA_INDEXED_VISIBILITY_PASS backend={} mode={} path={} culled,boundary,order,pixels",
+                            backend, mode, batch.usesGpuVisibility() ? "gpu" : "cpu");
+                }
                 result.complete(null);
             }, 0);
         } catch (RuntimeException error) {
@@ -126,6 +162,8 @@ public final class IndexedDrawBatchSmoke {
         require(actualRed == red && actualGreen == green && bytes.get(offset + 2) == 0 && (bytes.get(offset + 3) & 255) == 255,
                 "Indexed draw pixel at " + x + "," + y + " has red=" + actualRed + " green=" + actualGreen);
     }
+
+    private enum Mode { DRAW, VISIBILITY, FORCED_CPU }
 
     private static void require(boolean condition, String message) {
         if (!condition) throw new IllegalStateException(message);

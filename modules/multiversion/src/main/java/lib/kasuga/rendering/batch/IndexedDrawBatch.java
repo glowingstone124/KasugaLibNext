@@ -7,25 +7,31 @@ import com.mojang.renderpearl.api.commands.CommandEncoder;
 import com.mojang.renderpearl.api.commands.RenderPass;
 import com.mojang.renderpearl.api.device.DeviceFeatures;
 import com.mojang.renderpearl.api.device.DeviceInfo;
+import org.joml.Vector4fc;
 import org.jspecify.annotations.Nullable;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /** An ordered group of indexed draws that share pipeline, bindings and render state. */
 public final class IndexedDrawBatch {
-    private static final int COMMAND_BYTES = RenderPass.INDIRECT_INDEXED_DRAW_SIZE;
+    static final int COMMAND_BYTES = RenderPass.INDIRECT_INDEXED_DRAW_SIZE;
     private final @Nullable GpuBufferSlice commands;
     private final List<Draw> direct;
     private final int drawCount;
     private final int maxIndirectDrawCount;
+    private final boolean gpuVisibility;
 
-    private IndexedDrawBatch(@Nullable GpuBufferSlice commands, List<Draw> direct, int drawCount, int maxIndirectDrawCount) {
+    private IndexedDrawBatch(@Nullable GpuBufferSlice commands, List<Draw> direct, int drawCount, int maxIndirectDrawCount,
+                             boolean gpuVisibility) {
         this.commands = commands;
         this.direct = direct;
         this.drawCount = drawCount;
         this.maxIndirectDrawCount = maxIndirectDrawCount;
+        this.gpuVisibility = gpuVisibility;
     }
 
     /**
@@ -48,7 +54,7 @@ public final class IndexedDrawBatch {
         int maxIndirectDrawCount = device.limits().maxDrawIndirectDrawCount();
         int drawCount = draws.size();
         if (drawCount < 2 || !features.drawIndirect() || !features.multiDrawIndirect() || maxIndirectDrawCount < 2) {
-            return new IndexedDrawBatch(null, List.copyOf(draws), drawCount, 0);
+            return new IndexedDrawBatch(null, List.copyOf(draws), drawCount, 0, false);
         }
 
         int bytes = Math.multiplyExact(drawCount, COMMAND_BYTES);
@@ -57,12 +63,50 @@ public final class IndexedDrawBatch {
                 .allocateGpuMapped(bytes, Integer.BYTES, GpuBuffer.USAGE_INDIRECT_PARAMETERS)) {
             ByteBuffer data = mapped.data().order(ByteOrder.nativeOrder());
             for (Draw draw : draws) {
-                data.putInt(draw.indexCount()).putInt(draw.instanceCount()).putInt(draw.firstIndex())
-                        .putInt(draw.vertexOffset()).putInt(draw.firstInstance());
+                draw.write(data);
             }
             commands = mapped.slice();
         }
-        return new IndexedDrawBatch(commands, List.of(), drawCount, maxIndirectDrawCount);
+        return new IndexedDrawBatch(commands, List.of(), drawCount, maxIndirectDrawCount, false);
+    }
+
+    /**
+     * Cull conservative bounding spheres against up to six normalized inward planes. Coordinates
+     * must be in the same space. Use camera-relative coordinates for large worlds. On an encoder
+     * without supported compute, cull on the CPU and select the regular indexed draw path.
+     * Prepare before opening the render pass, and draw before the encoder is submitted.
+     * {@code -Dkasuga.disableVulkanCompute=true} selects CPU visibility on Vulkan as well.
+     * Surviving draws keep their original order. Shaders must not depend on the draw ID,
+     * which can differ when the CPU path removes hidden commands.
+     */
+    public static IndexedDrawBatch prepareVisible(CommandEncoder encoder, List<Candidate> candidates,
+                                                  List<? extends Vector4fc> planes) {
+        RenderSystem.assertOnRenderThread();
+        if (planes.size() > 6) throw new IllegalArgumentException("Expected up to six clip planes");
+        for (Vector4fc plane : planes) {
+            double lengthSquared = (double) plane.x() * plane.x() + (double) plane.y() * plane.y()
+                    + (double) plane.z() * plane.z();
+            if (!Double.isFinite(lengthSquared) || Math.abs(lengthSquared - 1.0) > .001 || !Float.isFinite(plane.w())) {
+                throw new IllegalArgumentException("Clip planes must be finite and normalized");
+            }
+        }
+        DeviceInfo device = RenderSystem.getDevice().getDeviceInfo();
+        DeviceFeatures features = device.features();
+        int maxDraws = device.limits().maxDrawIndirectDrawCount();
+        if (candidates.size() > 1 && !planes.isEmpty() && maxDraws > 1
+                && features.drawIndirect() && features.multiDrawIndirect() && features.nonZeroFirstInstance()) {
+            GpuBufferSlice commands = VulkanIndexedVisibility.prepare(encoder, candidates, planes);
+            if (commands != null) return new IndexedDrawBatch(commands, List.of(), candidates.size(), maxDraws, true);
+        }
+        List<Draw> visible = new ArrayList<>();
+        for (Candidate candidate : candidates) {
+            if (candidate.isVisible(planes)) visible.add(candidate.draw());
+        }
+        return prepare(encoder, visible);
+    }
+
+    public boolean usesGpuVisibility() {
+        return gpuVisibility;
     }
 
     public boolean usesIndirect() {
@@ -84,12 +128,35 @@ public final class IndexedDrawBatch {
         }
     }
 
+    /** An indexed draw and its conservative bounding sphere. */
+    public record Candidate(Draw draw, float x, float y, float z, float radius) {
+        public Candidate {
+            Objects.requireNonNull(draw, "draw");
+            if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z)
+                    || !Float.isFinite(radius) || radius < 0) {
+                throw new IllegalArgumentException("Expected a finite bounding sphere with a non-negative radius");
+            }
+        }
+
+        private boolean isVisible(List<? extends Vector4fc> planes) {
+            for (Vector4fc plane : planes) {
+                float distance = plane.x() * x + plane.y() * y + plane.z() * z + plane.w();
+                if (distance < -radius - .0001f) return false;
+            }
+            return true;
+        }
+    }
+
     /** {@code firstIndex} is in index elements, and {@code vertexOffset} is signed. */
     public record Draw(int indexCount, int instanceCount, int firstIndex, int vertexOffset, int firstInstance) {
         public Draw {
             if (indexCount < 0 || instanceCount < 0 || firstIndex < 0 || firstInstance < 0) {
                 throw new IllegalArgumentException("Indexed draw counts and first indices must be non-negative");
             }
+        }
+
+        void write(ByteBuffer data) {
+            data.putInt(indexCount).putInt(instanceCount).putInt(firstIndex).putInt(vertexOffset).putInt(firstInstance);
         }
     }
 }
