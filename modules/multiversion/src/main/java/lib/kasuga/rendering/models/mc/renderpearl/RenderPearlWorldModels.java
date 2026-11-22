@@ -7,6 +7,8 @@ import lib.kasuga.rendering.lighting.LightFrame;
 import lib.kasuga.rendering.models.mc.component.ModelComponents;
 import lib.kasuga.rendering.models.mc.component.ModelComponentsHolder;
 import lib.kasuga.rendering.models.mc.component.ModelLightPlacement;
+import lib.kasuga.rendering.models.mc.dynamic.ModelParticleRenderer;
+import lib.kasuga.rendering.models.mc.dynamic.ModelParticleRuntime;
 import lib.kasuga.rendering.models.mc.scene.MinecraftModelSource;
 import lib.kasuga.rendering.models.uml.backend.DepthBias;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
@@ -86,7 +88,7 @@ public final class RenderPearlWorldModels {
         }
     }
 
-    /** Captures model geometry and its authored bone lights from the same evaluated pose. */
+    /** Captures geometry, bone lights and emitters from the same evaluated pose. */
     public static void addToFrame(ExtractLevelRenderStateEvent event, ModelInstance model,
                                   Function<Texture, Identifier> textures, Matrix4fc cameraRelative,
                                   Matrix4dc worldPlacement, int packedLight) {
@@ -109,6 +111,7 @@ public final class RenderPearlWorldModels {
                 }
             }
         }
+        ModelParticleRenderer.extract(event, model, worldPlacement, partialTick);
         if (!(model.getModel().getModelData() instanceof ModelComponentsHolder holder)) return;
         ModelComponents components = holder.components();
         if (components == null) return;
@@ -125,7 +128,10 @@ public final class RenderPearlWorldModels {
         if (!(event.getLevel() instanceof ClientLevel level)) return;
         Map<ModelInstance, Mount> removed = LEVELS.remove(level);
         if (removed == null) return;
-        for (Mount mount : removed.values()) mount.closed = true;
+        for (Mount mount : removed.values()) {
+            mount.closed = true;
+            ModelParticleRuntime.detachWorldPlacement(mount.model);
+        }
     }
 
     private static void requireClientThread() {
@@ -162,6 +168,7 @@ public final class RenderPearlWorldModels {
             requireClientThread();
             if (closed) return;
             closed = true;
+            ModelParticleRuntime.detachWorldPlacement(model);
             Map<ModelInstance, Mount> models = LEVELS.get(level);
             if (models == null) return;
             models.remove(model, this);

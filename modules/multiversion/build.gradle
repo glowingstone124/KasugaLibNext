@@ -116,6 +116,7 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
     from(rootProject.file('modules/modelling/src/main/java')) {
         include 'lib/kasuga/rendering/models/mc/dynamic/fsm/**',
                 'lib/kasuga/rendering/models/mc/dynamic/MinecraftModelRuntime.java',
+                'lib/kasuga/rendering/models/mc/dynamic/ModelParticleRuntime.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockPhysics.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRagdollEnvironment.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRigidBody.java',
@@ -219,6 +220,13 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
     }
     filesMatching('**/SceneTrack.java') {
         filter { String line -> line.replace('BuiltInRegistries.SOUND_EVENT.get(sound)', 'BuiltInRegistries.SOUND_EVENT.getValue(sound)') }
+    }
+    filesMatching('**/ModelParticleRuntime.java') {
+        filter { String line ->
+            if (line.contains('import lib.kasuga.rendering.effect.RenderPipelineRegistrar;') ||
+                    line.contains('public static void initialize(RenderPipelineRegistrar')) return null
+            line
+        }
     }
     into(layout.buildDirectory.dir('generated/sources/models/java'))
 }

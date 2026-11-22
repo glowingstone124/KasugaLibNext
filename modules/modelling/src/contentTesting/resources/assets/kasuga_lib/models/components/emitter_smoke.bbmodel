@@ -726,6 +726,25 @@
           0,
           0
         ]
+      },
+      {
+        "id": "local-exhaust-smoke",
+        "name": "local exhaust",
+        "bone": "a3e98d75-268c-7e34-ddec-330cddfb5058",
+        "position": [10, 8, 0],
+        "rotation": [0, 0, 0],
+        "rate": 120,
+        "max_particles": 128,
+        "space": "local",
+        "particle": {
+          "lifetime": 0.8,
+          "speed": 0,
+          "spread": 0,
+          "size": 5,
+          "color": "#66ff22",
+          "gravity": [0, 0, 0],
+          "texture": "kasuga_lib:particle/absent_smoke_texture"
+        }
       }
     ],
     "bindings": []

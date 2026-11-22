@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import lib.kasuga.KasugaLib;
+import lib.kasuga.rendering.models.mc.dynamic.ModelParticleRuntime;
 import lib.kasuga.rendering.models.mc.scene.LayerLayout;
 import lib.kasuga.rendering.models.mc.scene.ModelBounds;
 import lib.kasuga.rendering.models.mc.scene.display.WorldDisplayTarget;
@@ -198,6 +199,7 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
     @Override protected void closeContent() {
         try {
             if (owned) model.close();
+            else ModelParticleRuntime.detachWorldPlacement(model);
         } finally {
             release.run();
         }

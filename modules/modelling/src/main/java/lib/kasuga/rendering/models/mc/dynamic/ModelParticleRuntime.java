@@ -1,28 +1,27 @@
 package lib.kasuga.rendering.models.mc.dynamic;
 
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import lib.kasuga.rendering.effect.RenderPipelineRegistrar;
-import lib.kasuga.rendering.effect.WorldRenderPipelineContext;
-import lib.kasuga.rendering.effect.pipeline.*;
 import lib.kasuga.rendering.models.mc.component.ModelComponents;
 import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
+import lib.kasuga.rendering.models.uml.dynamic.SkeletonInstance;
 import lib.kasuga.rendering.models.uml.dynamic.tick_loop.ModelTickLoop;
 import lib.kasuga.rendering.models.uml.dynamic.tick_loop.PendingTransform;
 import lib.kasuga.rendering.models.uml.dynamic.tick_loop.handler.ModelTickLoopModule;
 import lib.kasuga.rendering.models.uml.math.Transform;
 import lib.kasuga.rendering.models.uml.structure.Model;
-import net.minecraft.client.renderer.LightTexture;
-import net.minecraft.client.renderer.RenderStateShard;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
+import org.joml.Matrix4d;
+import org.joml.Matrix4dc;
 import org.joml.Matrix4f;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.WeakHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 /** Instance-owned simulation with a weak world-render registry. Never retains a model globally. */
@@ -30,16 +29,22 @@ public final class ModelParticleRuntime {
     public static final String MODULE_ID = "kasuga:model_emitters";
     private static final double STEP = 1.0 / 120.0;
     private static final Map<EmitterModule, Boolean> MODULES = new WeakHashMap<>();
-    private static final ResourceLocation DOT = ResourceLocation.parse("kasuga_lib:textures/particle/model_dot.png");
-    private static final Map<ResourceLocation, ResourceLocation> TEXTURES = new java.util.concurrent.ConcurrentHashMap<>();
-    private static boolean initialized;
-    private static int lastVisibleCount;
+    static final ResourceLocation DEFAULT_TEXTURE = ResourceLocation.parse("kasuga_lib:textures/particle/model_dot.png");
 
     private ModelParticleRuntime() {}
 
     public static void install(ModelInstance instance, ModelComponents components) {
+        install(instance, components, false);
+    }
+
+    /** Installs an emitter for a host that applies its world placement during frame extraction. */
+    public static void installWithWorldPlacement(ModelInstance instance, ModelComponents components) {
+        install(instance, components, true);
+    }
+
+    private static void install(ModelInstance instance, ModelComponents components, boolean externalPlacement) {
         if (components.emitters().isEmpty() || module(instance) != null) return;
-        EmitterModule module = new EmitterModule(components.emitters());
+        EmitterModule module = new EmitterModule(components.emitters(), externalPlacement);
         instance.getTickLoop().addPostPhysics(MODULE_ID, module);
         synchronized (MODULES) { MODULES.put(module, Boolean.TRUE); }
     }
@@ -58,43 +63,43 @@ public final class ModelParticleRuntime {
         if (module != null) module.disable();
     }
 
+    /** Retires a scene placement so the next attachment starts with empty emitters. */
+    public static void detachWorldPlacement(ModelInstance instance) {
+        EmitterModule module = module(instance);
+        if (module != null && module.externalPlacement) module.resetWorld();
+    }
+
     /** Old-world instances must be explicitly registered again before emitting in another world. */
     public static void clearWorldState() {
         for (EmitterModule module : modules()) module.resetWorld();
     }
 
-    public static void invalidateTextures() { TEXTURES.clear(); }
-    public static int lastVisibleCount() { return lastVisibleCount; }
+    public static void invalidateTextures() { ModelParticleRenderer.invalidateTextures(); }
+    public static int lastVisibleCount() { return ModelParticleRenderer.lastVisibleCount(); }
 
-    private static List<EmitterModule> modules() {
+    static List<EmitterModule> modules() {
         synchronized (MODULES) { return new ArrayList<>(MODULES.keySet()); }
     }
 
-    public static synchronized void initialize(RenderPipelineRegistrar registrar) {
-        if (initialized) return;
-        registrar.world(RenderPipelineDescriptor.builder(ResourceLocation.parse("kasuga_lib:effects/model_emitters"), RenderPhase.AFTER_PARTICLES)
-                .draw(draw -> draw.vertexFormat(DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP)
-                        .primitiveMode(VertexFormat.Mode.QUADS).bufferSize(32768).sortOnUpload(true)
-                        .shaderState(RenderStateShard.POSITION_COLOR_TEX_LIGHTMAP_SHADER)
-                        .blend(PipelineBlendMode.TRANSLUCENT).depthTest(PipelineDepthTest.LEQUAL)
-                        .cull(PipelineCullMode.DISABLED).writeMask(PipelineWriteMask.COLOR).target(PipelineTarget.PARTICLES))
-                .build(), ModelParticleRuntime::render);
-        initialized = true;
-    }
+    public static void initialize(RenderPipelineRegistrar registrar) { ModelParticleRenderer.initialize(registrar); }
 
     public record ParticleView(Vector3d position, float size, Vector4f color, ResourceLocation texture) {
         public ParticleView { position = new Vector3d(position); color = new Vector4f(color); }
         @Override public Vector3d position() { return new Vector3d(position); }
         @Override public Vector4f color() { return new Vector4f(color); }
+        double distanceSquared(double x, double y, double z) { return position.distanceSquared(x, y, z); }
     }
 
     public static final class EmitterModule implements ModelTickLoopModule {
         private final List<EmitterState> emitters;
+        private final boolean externalPlacement;
         private double accumulator;
         private boolean enabled, closed, autoActivationAllowed = true;
 
-        private EmitterModule(List<ModelComponents.EmitterDefinition> definitions) {
-            emitters = definitions.stream().map(EmitterState::new).toList();
+        private EmitterModule(List<ModelComponents.EmitterDefinition> definitions, boolean externalPlacement) {
+            this.externalPlacement = externalPlacement;
+            emitters = new ArrayList<>(definitions.size());
+            for (ModelComponents.EmitterDefinition definition : definitions) emitters.add(new EmitterState(definition));
         }
         public boolean enabled() { return enabled && !closed; }
         public boolean closed() { return closed; }
@@ -118,19 +123,43 @@ public final class ModelParticleRuntime {
         public void enable() { if (!closed) { enabled = true; autoActivationAllowed = true; } }
         public void disable() { enabled = false; autoActivationAllowed = false; clear(); }
         private void resetWorld() { enabled = false; autoActivationAllowed = true; clear(); }
-        private void clear() { accumulator = 0; for (EmitterState e : emitters) { e.particles.clear(); e.carry = 0; } }
+        private void clear() {
+            accumulator = 0;
+            for (EmitterState emitter : emitters) {
+                emitter.particles.clear();
+                emitter.carry = 0;
+            }
+        }
 
         @Override public void tick(Model model, PendingTransform[] transforms, ModelTickLoop loop, float deltaTime) {
-            if (closed) return;
+            if (closed || externalPlacement) return;
             ModelInstance instance = loop.getInstance();
             if (!enabled && autoActivationAllowed && MinecraftModelRuntime.isRegistered(instance)) enable();
             if (!enabled) return;
-            var skeleton = instance.getSkeletonInstance();
+            advance(instance.getSkeletonInstance(), null, deltaTime);
+        }
+
+        void advanceInWorld(SkeletonInstance skeleton, Matrix4dc placement, float deltaTime) {
+            if (closed || !externalPlacement) return;
+            if (!enabled && autoActivationAllowed) enable();
+            if (enabled) advance(skeleton, placement, deltaTime);
+        }
+
+        private void advance(SkeletonInstance skeleton, Matrix4dc placement, float deltaTime) {
             Vector3d origin = skeleton.getWorldOrigin();
             for (EmitterState emitter : emitters) {
                 Transform frame = skeleton.anchorTransformRelative(emitter.definition.anchorName(), origin);
                 emitter.valid = frame != null && frame.transform().isFinite();
-                if (emitter.valid) { emitter.frame.set(frame); emitter.origin.set(origin); }
+                if (!emitter.valid) continue;
+                if (placement == null) {
+                    emitter.frame.set(frame);
+                    emitter.origin.set(origin);
+                } else {
+                    // The external placement already includes the world's floating origin.
+                    Matrix4d anchor = new Matrix4d(placement).mul(new Matrix4d(frame.transform()));
+                    emitter.origin.set(anchor.m30(), anchor.m31(), anchor.m32());
+                    emitter.frame.set(new Matrix4f(anchor.setTranslation(0, 0, 0)));
+                }
             }
             if (!(deltaTime > 0) || !Float.isFinite(deltaTime)) return;
             accumulator = Math.min(accumulator + deltaTime, 0.1);
@@ -194,42 +223,11 @@ public final class ModelParticleRuntime {
     }
 
     public static ResourceLocation textureLocation(String value) {
-        if (value == null || value.isBlank()) return DOT;
+        if (value == null || value.isBlank()) return DEFAULT_TEXTURE;
         ResourceLocation id = ResourceLocation.parse(value);
         String path = id.getPath();
         if (!path.startsWith("textures/")) path = "textures/" + path;
         if (!path.endsWith(".png")) path += ".png";
         return ResourceLocation.fromNamespaceAndPath(id.getNamespace(), path);
-    }
-
-    private static void render(WorldRenderPipelineContext context) {
-        List<ParticleView> particles = new ArrayList<>();
-        for (EmitterModule module : modules()) if (module.enabled()) particles.addAll(module.particles());
-        var camera = context.camera().getPosition();
-        particles.sort(Comparator.comparingDouble((ParticleView p) -> p.position.distanceSquared(camera.x,camera.y,camera.z)).reversed());
-        Set<RenderType> used = new HashSet<>();
-        lastVisibleCount = 0;
-        try {
-            for (ParticleView p : particles) {
-                double radius = p.size;
-                if (context.frustum() != null && !context.frustum().isVisible(new net.minecraft.world.phys.AABB(
-                        p.position.x-radius,p.position.y-radius,p.position.z-radius,p.position.x+radius,p.position.y+radius,p.position.z+radius))) continue;
-                ResourceLocation texture = TEXTURES.computeIfAbsent(p.texture, id -> context.minecraft().getResourceManager().getResource(id).isPresent() ? id : DOT);
-                RenderType type = context.pipeline().renderType(texture, false, false); used.add(type);
-                VertexConsumer buffer = context.bufferSource().getBuffer(type);
-                var pose = context.poseStack(); pose.pushPose();
-                try {
-                    pose.translate(p.position.x-camera.x,p.position.y-camera.y,p.position.z-camera.z);
-                    pose.mulPose(context.camera().rotation());
-                    Matrix4f matrix = pose.last().pose(); float half = p.size*0.5f;
-                    vertex(buffer,matrix,-half,-half,0,1,p.color); vertex(buffer,matrix,half,-half,1,1,p.color);
-                    vertex(buffer,matrix,half,half,1,0,p.color); vertex(buffer,matrix,-half,half,0,0,p.color);
-                } finally { pose.popPose(); }
-                lastVisibleCount++;
-            }
-        } finally { for (RenderType type : used) context.bufferSource().endBatch(type); }
-    }
-    private static void vertex(VertexConsumer buffer, Matrix4f pose, float x, float y, float u, float v, Vector4f color) {
-        buffer.addVertex(pose,x,y,0).setColor(color.x,color.y,color.z,color.w).setUv(u,v).setLight(LightTexture.FULL_BRIGHT);
     }
 }

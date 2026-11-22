@@ -102,6 +102,10 @@ with the same lighting shader calculations as 1.21.1. Nested world scenes can
 own model and light nodes. Native Blockbench models use their authored Locator
 lights and the same evaluated bone pose as their geometry. See the
 [world-space light guide](doc/guides/world-lights.md).
+Authored model emitters also use that pose. Local particles follow the
+emitter and its scene transforms, and world-space particles stay at their
+emitted positions while the model moves. Both RenderPearl backends render
+their textured billboards in classic and improved transparency.
 
 The `fsm_block` and `fsm_be` data-driven factories can bind `.bbmodel`, `.gltf`,
 `.glb`, `.obj`, Java block model JSON and Bedrock `.geo.json` to a block entity.
@@ -198,7 +202,7 @@ Set `-PkasugaGraphicsSmoke=opengl` to test OpenGL. A passing run logs
 `KASUGA_STRUCTURE_BLOCK_ENTITIES_PASS`, `KASUGA_WORLD_PIPELINE_PASS`, `KASUGA_POST_GRAPH_PASS`,
 `KASUGA_SHADER_DSL_PASS`, `KASUGA_BLACK_HOLE_PASS`, `KASUGA_WORLD_UI_PASS`,
 `KASUGA_STAGE_PASS`, `KASUGA_SCENE_CLIENT_PASS`,
-`KASUGA_MODEL_INSTANCING_PASS`,
+`KASUGA_MODEL_INSTANCING_PASS`, `KASUGA_MODEL_EMITTERS_PASS`,
 `KASUGA_NEBULA_PASS`,
 `KASUGA_FRAME_OUTPUT_PASS`, `KASUGA_FRAME_WINDOW_PASS`, `KASUGA_PLAYER_CAMERA_PASS`,
 `KASUGA_DETACHED_CAMERA_PASS`, `KASUGA_REMOTE_CAMERA_PASS`, `KASUGA_CAMERA_HISTORY_PASS`, and `KASUGA_SCRIPTING_PASS`.

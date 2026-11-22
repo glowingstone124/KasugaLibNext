@@ -6,7 +6,7 @@ import lib.kasuga.rendering.models.uml.dynamic.ModelInstance;
 final class ModelRuntimeEffects {
     private ModelRuntimeEffects() {}
 
-    static void register(ModelInstance instance) {}
-    static void unregister(ModelInstance instance) {}
-    static void clearWorldState() {}
+    static void register(ModelInstance instance) { ModelParticleRuntime.register(instance); }
+    static void unregister(ModelInstance instance) { ModelParticleRuntime.unregister(instance); }
+    static void clearWorldState() { ModelParticleRuntime.clearWorldState(); }
 }
