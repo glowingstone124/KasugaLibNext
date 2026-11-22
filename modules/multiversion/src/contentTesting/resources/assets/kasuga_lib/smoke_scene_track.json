@@ -1,0 +1,8 @@
+{
+  "title": "Scene smoke",
+  "artist": "Kasuga",
+  "album": "Regression",
+  "duration_seconds": 1,
+  "sound": "minecraft:block.stone.step",
+  "audio_file": "minecraft:sounds/step/stone1.ogg"
+}

@@ -2,6 +2,7 @@ package lib.kasuga.audio;
 
 import lib.kasuga.KasugaLib;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.sounds.SoundEvent;
@@ -25,19 +26,21 @@ public final class SpatialAudio {
     public static Voice play(SoundEvent sound, SoundSource category, Vec3 position, float gain) {
         if (!Float.isFinite(gain) || gain <= 0 || !Double.isFinite(position.lengthSqr()))
             throw new IllegalArgumentException("A spatial voice requires a finite position and positive gain");
-        var voice = new Voice(sound, category, position, gain);
+        Voice voice = new Voice(sound, category, position, gain);
         VOICES.add(voice);
         Minecraft.getInstance().getSoundManager().play(voice);
         return voice;
     }
     public static int activeCount() { return VOICES.size(); }
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
-        var level = Minecraft.getInstance().level;
-        for (var voice : List.copyOf(VOICES)) if (voice.level != level || voice.isStopped()) voice.close();
+        ClientLevel level = Minecraft.getInstance().level;
+        for (Voice voice : List.copyOf(VOICES)) {
+            if (voice.level != level || voice.isStopped()) voice.close();
+        }
     }
 
     public static final class Voice extends AbstractTickableSoundInstance implements AutoCloseable {
-        private final Object level = Minecraft.getInstance().level;
+        private final ClientLevel level = Minecraft.getInstance().level;
         private int ticks;
         private boolean closed, observedPlaying;
         private Voice(SoundEvent sound, SoundSource category, Vec3 position, float gain) {

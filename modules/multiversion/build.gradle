@@ -131,6 +131,8 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/scene/SceneControls.java',
                 'lib/kasuga/scene/SceneOverlay.java',
                 'lib/kasuga/scene/SceneWarmup.java',
+                'lib/kasuga/audio/SceneTrack.java',
+                'lib/kasuga/audio/SpatialAudio.java',
                 'lib/kasuga/rendering/models/mc/scene/BlueprintImporters.java',
                 'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipHelper.java',
                 'lib/kasuga/rendering/models/mc/typo/pmx_entry/ZipResource.java',
@@ -214,6 +216,9 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                     .replace('.pose().popPose()', '.pose().popMatrix()')
                     .replace('.pose().scale(scale, scale, 1)', '.pose().scale(scale, scale)')
         }
+    }
+    filesMatching('**/SceneTrack.java') {
+        filter { String line -> line.replace('BuiltInRegistries.SOUND_EVENT.get(sound)', 'BuiltInRegistries.SOUND_EVENT.getValue(sound)') }
     }
     into(layout.buildDirectory.dir('generated/sources/models/java'))
 }

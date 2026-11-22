@@ -2,6 +2,9 @@ package lib.kasuga.rendering.models.mc.renderpearl;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.logging.LogUtils;
+import lib.kasuga.KasugaLib;
+import lib.kasuga.audio.SceneTrack;
+import lib.kasuga.audio.SpatialAudio;
 import lib.kasuga.rendering.models.mc.backend.ui.UIBackend;
 import lib.kasuga.scene.SceneControls;
 import lib.kasuga.scene.SceneOverlay;
@@ -12,6 +15,7 @@ import net.minecraft.client.Screenshot;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
@@ -72,6 +76,7 @@ final class SceneClientSmoke {
         overlay.track("Scene smoke", "Kasuga", "Regression", 8).seconds(4).visible(true);
         fade = overlay.fadeFromBlack(.2f).pause();
         verifyControls(client);
+        verifyAudio(camera.position().add(forward));
     }
 
     private static void verifyControls(Minecraft client) {
@@ -99,6 +104,20 @@ final class SceneClientSmoke {
                 || wheel.size() != 1 || wheel.getFirst() <= 0) {
             throw new IllegalStateException("Scene input did not isolate actions and preserve movement");
         }
+    }
+
+    private static void verifyAudio(Vec3 position) {
+        SceneTrack track = SceneTrack.load(Identifier.fromNamespaceAndPath(KasugaLib.MODID, "smoke_scene_track.json"));
+        if (!track.available() || track.durationSeconds() != 1 || !track.title().equals("Scene smoke")) {
+            throw new IllegalStateException("Scene track did not resolve its resource metadata and sound");
+        }
+        try (SpatialAudio.Voice voice = track.playAt(position, .1f)) {
+            if (!voice.spatial() || !voice.position().equals(position) || SpatialAudio.activeCount() != 1) {
+                throw new IllegalStateException("Scene audio did not register a positional voice");
+            }
+            if (!voice.isPlaying()) throw new IllegalStateException("Scene audio was not accepted by the sound engine");
+        }
+        if (SpatialAudio.activeCount() != 0) throw new IllegalStateException("Scene audio voice was not released");
     }
 
     private static void capture(Minecraft client, boolean black) {
@@ -138,6 +157,6 @@ final class SceneClientSmoke {
             throw new IllegalStateException("Scene controls and overlay did not release their state");
         }
         done = true;
-        LogUtils.getLogger().info("KASUGA_SCENE_CLIENT_PASS native-keys,mouse,scroll,warmup,black-frame,prompt,cleanup");
+        LogUtils.getLogger().info("KASUGA_SCENE_CLIENT_PASS native-keys,mouse,scroll,warmup,black-frame,prompt,spatial-audio,cleanup");
     }
 }

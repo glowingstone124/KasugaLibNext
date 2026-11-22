@@ -128,7 +128,8 @@ scheduler on both backends. In a client world, use `/kasuga_physics block` or
 `SceneProps` adds block and item props, including Box3D bodies. On the client,
 `SceneWarmup` waits for authored blocks and visible terrain, `SceneOverlay`
 supplies scene fades and world prompts, and `SceneControls` scopes scene input
-while leaving movement available. In 26.3, use `InputConstants` key codes.
+while leaving movement available. `SceneTrack` and `SpatialAudio` play positional
+sound from resource-pack definitions. In 26.3, use `InputConstants` key codes.
 
 Document items register typed components with `DocumentComponentReg`. Their
 first-person renderers submit page geometry and text through
