@@ -9,6 +9,7 @@ import lib.kasuga.host.DocumentSmoke;
 import lib.kasuga.rendering.models.mc.backend.GuiPreviewSmoke;
 import lib.kasuga.rendering.models.mc.backend.StructurePreviewSmoke;
 import lib.kasuga.rendering.models.mc.backend.ui.WorldUiSmoke;
+import lib.kasuga.rendering.models.mc.component.LiveModelSyncClientSmoke;
 import lib.kasuga.host.ResourcePackSmoke;
 import lib.kasuga.host.RegistrationSmoke;
 import lib.kasuga.rendering.effect.builtin.light.WorldLights;
@@ -42,6 +43,7 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
 import org.joml.Matrix4f;
 import org.joml.Vector3fc;
 import org.slf4j.Logger;
+import test.kasuga.modelling.demo.nebula.NebulaVerification;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -53,6 +55,7 @@ import java.util.UUID;
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
 public final class RenderPearlClientSmoke {
     private static final Logger LOGGER = LogUtils.getLogger();
+    private static final NebulaVerification NEBULA = new NebulaVerification();
     private static final String EXPECTED_BACKEND = System.getProperty("kasuga.graphicsSmoke", "");
     private static final Identifier SOURCE = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "models/smoke/triangle.gltf");
     private static final Identifier WHITE = Identifier.fromNamespaceAndPath(KasugaLib.MODID, "smoke/white");
@@ -194,11 +197,12 @@ public final class RenderPearlClientSmoke {
             else if (RagdollSmoke.needsFrames()) RagdollSmoke.afterFrame(client);
             else if (StageSmoke.needsFrames()) StageSmoke.afterFrame(client);
             else if (SceneClientSmoke.needsFrames()) SceneClientSmoke.afterFrame(client);
-            else if (NebulaSmoke.needsFrames()) NebulaSmoke.afterFrame(client);
+            else if (NEBULA.needsFrames()) NEBULA.afterFrame(client);
             else if (PostProcessGraphSmoke.needsFrames()) PostProcessGraphSmoke.afterFrame(client);
             else if (BlackHoleSmoke.needsFrames()) BlackHoleSmoke.afterFrame(client);
             else if (ParticleSmoke.needsFrames()) ParticleSmoke.afterFrame(client);
             else if (ModelEmitterSmoke.needsFrames()) ModelEmitterSmoke.afterFrame(client);
+            else if (LiveModelSyncClientSmoke.needsFrames()) LiveModelSyncClientSmoke.afterFrame(client);
             else if (WaterSmoke.needsFrames()) WaterSmoke.afterFrame(client);
             else if (CloudSmoke.needsFrames()) CloudSmoke.afterFrame(client);
             else if (FrameOutputSmoke.started()) FrameOutputSmoke.afterFrame(client);

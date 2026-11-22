@@ -5,6 +5,7 @@ import lib.kasuga.KasugaLib;
 import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
 import lib.kasuga.scene.MinecraftStage;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.commands.Commands;
@@ -26,6 +27,7 @@ import net.neoforged.neoforge.event.GameShuttingDownEvent;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BooleanSupplier;
 
 /** Development-only flight through the shared Nebula scene. */
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
@@ -36,7 +38,9 @@ public final class NebulaDemo {
     private static final int CAPTURE_FPS = Integer.getInteger("kasuga.nebula.captureFps", 30);
     private static Session current;
     private static boolean autoHandled;
+    private static boolean autoWorldRequested;
     private static boolean capturing;
+    private static BooleanSupplier captureReady;
 
     private NebulaDemo() {}
 
@@ -77,6 +81,7 @@ public final class NebulaDemo {
         if (session == null) return;
         current = null;
         capturing = false;
+        captureReady = null;
         Minecraft client = Minecraft.getInstance();
         if (session.renderer != null) {
             session.renderer.close();
@@ -95,15 +100,35 @@ public final class NebulaDemo {
     public static void capture(boolean enabled) {
         if (!active()) return;
         capturing = enabled;
+        captureReady = null;
         current.renderer.capturing(enabled);
     }
+
+    static void record(BooleanSupplier ready) {
+        SIMULATION.reset();
+        capture(true);
+        captureReady = ready;
+    }
+
+    static float sceneTime() { return SIMULATION.time(1); }
+    static long lightningCount() { return SIMULATION.emitted(); }
+    static float frequency() { return SIMULATION.frequency(); }
+    static float cameraDistance() { return current.renderer.cameraDistance(); }
+    static NebulaGpuTiming measureGpuTime() { return current.renderer.measureGpuTime(); }
+    static void stopGpuTiming() { current.renderer.stopGpuTiming(); }
 
     static void orbit(double dx, double dy) { if (active()) current.renderer.orbit(dx, dy); }
 
     @SubscribeEvent public static void tick(ClientTickEvent.Post event) {
         Minecraft client = Minecraft.getInstance();
-        if (!autoHandled && Boolean.getBoolean("kasuga.nebula.auto") && client.level != null
-                && client.gui.overlay() == null && client.gui.screen() == null) autoHandled = start();
+        if (!autoHandled && Boolean.getBoolean("kasuga.nebula.auto") && client.gui.overlay() == null) {
+            String world = System.getProperty("kasuga.nebula.world");
+            if (!autoWorldRequested && world != null && client.level == null && client.gui.screen() instanceof TitleScreen) {
+                autoWorldRequested = true;
+                client.createWorldOpenFlows().openWorld(world, () -> client.gui.setScreen(new TitleScreen()));
+            }
+            if (client.level != null && client.gui.screen() == null) autoHandled = start();
+        }
         Session session = current;
         if (session == null) return;
         if (client.player == null || client.level == null || client.getSingleplayerServer() != session.server) {
@@ -137,7 +162,9 @@ public final class NebulaDemo {
     }
 
     @SubscribeEvent public static void beforeFrame(RenderFrameEvent.Pre event) {
-        if (active() && capturing) SIMULATION.captureFrame(CAPTURE_FPS);
+        if (active() && capturing && (captureReady == null || captureReady.getAsBoolean())) {
+            SIMULATION.captureFrame(CAPTURE_FPS);
+        }
     }
 
     @SubscribeEvent public static void onReload(ClientResourceReloadFinishEvent event) {

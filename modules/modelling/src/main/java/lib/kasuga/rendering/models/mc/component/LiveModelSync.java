@@ -6,7 +6,6 @@ import lib.kasuga.KasugaLib;
 import lib.kasuga.core.resource.ResourceSystem;
 import lib.kasuga.core.vfs.VfsPath;
 import lib.kasuga.core.vfs.VfsSubscription;
-import lib.kasuga.core.vfs.VfsWriteTransaction;
 import lib.kasuga.core.vfs.VirtualFileSystem;
 import lib.kasuga.core.vfs.backend.DirectoryVfs;
 import net.minecraft.client.Minecraft;
@@ -51,13 +50,7 @@ public final class LiveModelSync {
         Files.createDirectories(root);
         DirectoryVfs vfs = new DirectoryVfs("kasuga-live-sync", root);
         try {
-            if (!vfs.exists(PACK_MCMETA)) {
-                try (VfsWriteTransaction tx = vfs.beginTransaction()) {
-                    tx.putString(PACK_MCMETA,
-                            "{\"pack\":{\"pack_format\":34,\"description\":\"Kasuga Blockbench live preview\"}}");
-                    tx.commit();
-                }
-            }
+            LivePreviewPack.ensureMetadata(vfs, PACK_MCMETA);
             return vfs;
         } catch (IOException | RuntimeException e) {
             vfs.close();

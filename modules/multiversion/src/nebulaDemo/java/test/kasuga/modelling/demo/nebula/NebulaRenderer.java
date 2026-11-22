@@ -66,6 +66,8 @@ final class NebulaRenderer implements AutoCloseable {
     private int drawCount;
     private int probe;
     private boolean capturing;
+    private float cameraDistance;
+    private NebulaGpuTiming timing;
 
     NebulaRenderer(ClientLevel level, NebulaSimulation simulation) {
         this.simulation = simulation;
@@ -88,6 +90,18 @@ final class NebulaRenderer implements AutoCloseable {
     int triangles() { return starship.triangles(); }
     void probe(int mode) { probe = mode; }
     void capturing(boolean value) { capturing = value; }
+    float cameraDistance() { return cameraDistance; }
+
+    NebulaGpuTiming measureGpuTime() {
+        if (timing == null) timing = new NebulaGpuTiming();
+        return timing;
+    }
+
+    void stopGpuTiming() {
+        if (timing == null) return;
+        timing.close();
+        timing = null;
+    }
 
     private void drawStarship(PostProcessGraphContext context) {
         float partial = capturing ? 1f : context.raw().partialTick();
@@ -99,6 +113,7 @@ final class NebulaRenderer implements AutoCloseable {
         WorldCameraView camera = simulation.camera(craft, warp, context.raw().mainTarget().width,
                 context.raw().mainTarget().height, azimuth, elevation, partial);
         eye.set((float) camera.x(), (float) camera.y(), (float) camera.z());
+        cameraDistance = eye.distance(craft.position());
         NebulaFlight.cameraForward(camera, forward);
         textures.uploadFrameData(time, eye, forward, wake, lights, counts.lights(), bolts, counts.segments(), craft, warp);
         camera.projection(.01f, 100, projection);
@@ -113,14 +128,19 @@ final class NebulaRenderer implements AutoCloseable {
     private void drawVolume(PostProcessGraphContext context) {
         View view = context.frame().require(FRAME_STATE, View.class);
         GpuBufferSlice parameters = uniform(512, data -> writeVolumeUniforms(view, data));
-        context.fullscreen(NebulaPipeline.VOLUME, VOLUME, false, pass -> {
-            pass.setUniform(PARAMETERS, parameters);
-            textures.bind(pass);
-            context.bindColor(pass, "CraftSurfaceSampler", NebulaPipeline.GBUFFER, 0);
-            context.bindColor(pass, "CraftNormalSampler", NebulaPipeline.GBUFFER, 1);
-            context.bindColor(pass, "CraftPbrSampler", NebulaPipeline.GBUFFER, 2);
-            context.bindDepth(pass, "CraftDepthSampler", NebulaPipeline.GBUFFER);
-        });
+        if (timing != null) timing.begin();
+        try {
+            context.fullscreen(NebulaPipeline.VOLUME, VOLUME, false, pass -> {
+                pass.setUniform(PARAMETERS, parameters);
+                textures.bind(pass);
+                context.bindColor(pass, "CraftSurfaceSampler", NebulaPipeline.GBUFFER, 0);
+                context.bindColor(pass, "CraftNormalSampler", NebulaPipeline.GBUFFER, 1);
+                context.bindColor(pass, "CraftPbrSampler", NebulaPipeline.GBUFFER, 2);
+                context.bindDepth(pass, "CraftDepthSampler", NebulaPipeline.GBUFFER);
+            });
+        } finally {
+            if (timing != null) timing.end();
+        }
         drawCount++;
     }
 
@@ -174,6 +194,7 @@ final class NebulaRenderer implements AutoCloseable {
 
     @Override public void close() {
         graph.close();
+        stopGpuTiming();
         reload();
     }
 

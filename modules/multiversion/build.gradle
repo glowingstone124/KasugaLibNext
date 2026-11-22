@@ -72,6 +72,14 @@ def prepareRegistrationSources = tasks.register('prepareRegistrationSources', Sy
                 'lib/kasuga/registration/data_driven/source/ModJarContentSource.java'
     }
     filter(updateMinecraftNames)
+    filesMatching(['**/registration/Registry.java', '**/registration/stages/MenuScreenBindingStage.java']) {
+        filter { String line ->
+            // NeoForge 26.3 no longer strips members annotated with OnlyIn.
+            // The client registration entry points already use explicit side dispatch.
+            if (line.contains('import net.neoforged.api.distmarker.') || line.contains('@OnlyIn(Dist.CLIENT)')) return null
+            line
+        }
+    }
     into(registrationDirectory)
 }
 def prepareDataDrivenTests = tasks.register('prepareDataDrivenTests', Sync) {
@@ -117,6 +125,8 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
         include 'lib/kasuga/rendering/models/mc/dynamic/fsm/**',
                 'lib/kasuga/rendering/models/mc/dynamic/MinecraftModelRuntime.java',
                 'lib/kasuga/rendering/models/mc/dynamic/ModelParticleRuntime.java',
+                'lib/kasuga/rendering/models/mc/component/LiveModelSync.java',
+                'lib/kasuga/rendering/models/mc/component/LiveModelSyncState.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockPhysics.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRagdollEnvironment.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRigidBody.java',
@@ -228,6 +238,13 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
             line
         }
     }
+    filesMatching('**/LiveModelSync.java') {
+        filter { String line ->
+            line.replace('mc.getOverlay()', 'mc.gui.overlay()')
+                    .replace('Minecraft.getInstance().player.displayClientMessage(Component.literal(text), false);',
+                            'Minecraft.getInstance().player.sendSystemMessage(Component.literal(text));')
+        }
+    }
     into(layout.buildDirectory.dir('generated/sources/models/java'))
 }
 def prepareScriptingSources = tasks.register('prepareScriptingSources', Sync) {
@@ -288,6 +305,7 @@ sourceSets.blackHoleDemo.java.srcDir(prepareBlackHoleDemoSources)
 def prepareNebulaDemoSources = tasks.register('prepareNebulaDemoSources', Sync) {
     from(rootProject.file('modules/modelling/src/contentTesting/java')) {
         include 'test/kasuga/modelling/demo/nebula/NebulaFlight.java',
+                'test/kasuga/modelling/demo/nebula/NebulaGpuTimer.java',
                 'test/kasuga/modelling/demo/nebula/NebulaLightningData.java',
                 'test/kasuga/modelling/demo/nebula/NebulaPipeline.java',
                 'test/kasuga/modelling/demo/nebula/NebulaSimulation.java',
@@ -448,6 +466,18 @@ neoForge {
             }
             def cobaltWorld = providers.gradleProperty('kasugaCobaltWorld')
             if (cobaltWorld.isPresent()) systemProperty 'kasuga.cobalt.world', cobaltWorld.get()
+            if (providers.gradleProperty('kasugaNebulaAuto').getOrElse('false').toBoolean()) {
+                systemProperty 'kasuga.nebula.auto', 'true'
+            }
+            def nebulaWorld = providers.gradleProperty('kasugaNebulaWorld')
+            if (nebulaWorld.isPresent()) systemProperty 'kasuga.nebula.world', nebulaWorld.get()
+            [
+                    kasugaNebulaWindowWidth: 'width',
+                    kasugaNebulaWindowHeight: 'height'
+            ].each { property, arg ->
+                def value = providers.gradleProperty(property)
+                if (value.isPresent()) programArguments.addAll "--${arg}".toString(), value.get()
+            }
         }
         client {
             client()
@@ -455,11 +485,19 @@ neoForge {
             if (!(graphicsSmoke in ['', 'vulkan', 'opengl'])) {
                 throw new GradleException("Unknown graphics API for the smoke client: ${graphicsSmoke}")
             }
-            gameDirectory = file(graphicsSmoke.isEmpty() ? 'run/26.3-client' : "run/26.3-smoke-${graphicsSmoke}")
+            gameDirectory = file(providers.gradleProperty('kasugaClientDirectory')
+                    .getOrElse(graphicsSmoke.isEmpty() ? 'run/26.3-client' : "run/26.3-smoke-${graphicsSmoke}".toString()))
+            def quickPlayWorld = providers.gradleProperty('kasugaQuickPlayWorld')
+            if (quickPlayWorld.isPresent()) programArguments.addAll '--quickPlaySingleplayer', quickPlayWorld.get()
+            def nebulaGraphics = providers.gradleProperty('kasugaNebulaGraphics')
+            if (nebulaGraphics.isPresent()) programArguments.addAll '--graphicsBackend', nebulaGraphics.get().toUpperCase(Locale.ROOT)
             if (!graphicsSmoke.isEmpty()) {
                 programArguments.addAll '--width', '960', '--height', '540',
                         '--graphicsBackend', graphicsSmoke.toUpperCase(Locale.ROOT)
                 systemProperty 'kasuga.graphicsSmoke', graphicsSmoke
+                if (providers.gradleProperty('kasugaTestLiveModels').getOrElse('false').toBoolean()) {
+                    systemProperty 'kasuga.testLiveModels', 'true'
+                }
             }
         }
         clientHeadless {
@@ -476,6 +514,22 @@ neoForge {
             systemProperty 'java.awt.headless', 'true'
             programArguments.addAll '--graphicsBackend', graphics.toUpperCase(Locale.ROOT)
             if (headlessTest) systemProperty 'kasuga.testHeadless', graphics
+            if (providers.gradleProperty('kasugaTestNebula').getOrElse('false').toBoolean()) {
+                systemProperty 'kasuga.testNebula', 'true'
+                [
+                        kasugaNebulaCreateWorld: 'createWorld',
+                        kasugaNebulaOutput: 'output',
+                        kasugaNebulaRecordFrames: 'recordFrames',
+                        kasugaNebulaCaptureFps: 'captureFps',
+                        kasugaNebulaEnforceGpuBudget: 'enforceGpuBudget',
+                        kasugaNebulaTimeoutSeconds: 'timeoutSeconds',
+                        kasugaNebulaWidth: 'width',
+                        kasugaNebulaHeight: 'height'
+                ].each { property, key ->
+                    def value = providers.gradleProperty(property)
+                    if (value.isPresent()) systemProperty "kasuga.nebula.${key}".toString(), value.get()
+                }
+            }
             def quickPlayWorld = providers.gradleProperty('kasugaQuickPlayWorld')
             if (quickPlayWorld.isPresent()) programArguments.addAll '--quickPlaySingleplayer', quickPlayWorld.get()
             def serverAddress = providers.gradleProperty('kasugaHeadlessServer')

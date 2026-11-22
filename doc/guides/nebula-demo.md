@@ -10,7 +10,7 @@ Minecraft 26.3 的开发客户端使用 Java 25。在私有单人世界运行 `/
 ./gradlew -PkasugaMinecraft=26.3 :modules:multiversion:runClient
 ```
 
-以下 Minecraft 1.21.1 录制流程需要 JDK 21、Python、`nbtlib==2.0.4` 和 PATH 中的 `ffmpeg` / `ffprobe`。
+录制脚本支持 Minecraft 1.21.1 和 26.3。默认选择 1.21.1 并使用 Java 21。选择 26.3 时使用 Java 25，`--graphics` 可指定 Vulkan 或 OpenGL。录制需要 PATH 中的 `ffmpeg` 和 `ffprobe`，复制已有存档时还需要 `nbtlib==2.0.4`。
 
 ```sh
 python3 -m venv build/nebula-venv
@@ -18,7 +18,7 @@ build/nebula-venv/bin/pip install nbtlib==2.0.4
 build/nebula-venv/bin/python scripts/nebula-sim.py --world /absolute/path/to/test-world
 ```
 
-脚本将源存档复制到隔离客户端目录，默认是 `build/nebula-sim/client/saves/nebula-sim`。未传 `--world` 时使用 `modules/modelling/run/client/saves/New World`，因此首次运行须准备一个测试存档。演示仅在未开放 LAN 的单人集成服务器启动；玩家临时进入末地高空，正常停止或退出世界时恢复原位置、维度、视角、游戏模式、飞行和 HUD 状态。
+脚本将源存档复制到输出目录下的 `client/saves/nebula-sim`。默认输出目录是 `build/nebula-sim` 或 `build/nebula-sim-26.3`。1.21.1 默认使用 `modules/modelling/run/client/saves/New World`。26.3 的无头测试在未指定 `--world` 时创建临时单人世界。两版均在私有集成服务器内启动演示，退出时恢复位置、维度、视角、游戏模式、飞行和 HUD 状态。
 
 | 操作 | 行为 |
 | --- | --- |
@@ -30,15 +30,15 @@ build/nebula-venv/bin/python scripts/nebula-sim.py --world /absolute/path/to/tes
 
 画面不绘制左上角面板，放电频率默认保持 `0.25 Hz`。镜头在 10.5–15 秒间拉远；远景使用场景时间，不随 15 秒曲速周期回绕。
 
-完整客户端验证与 15 秒离线 4K60 导出：
+26.3 Vulkan 客户端验证与 15 秒离线 4K60 导出可直接使用新世界。
 
 ```sh
-build/nebula-venv/bin/python scripts/nebula-sim.py --test --record-seconds 15 \
+python3 scripts/nebula-sim.py --minecraft 26.3 --graphics vulkan --test --record-seconds 15 \
   --width 3840 --height 2160 --fps 60 --allow-slow-render \
-  --timeout-seconds 1800 --output build/nebula-kasuga-migration-4k60
+  --timeout-seconds 1800 --output build/nebula-26.3-vulkan-4k60
 ```
 
-命令行显示 `NEBULA_RENDER_PROGRESS 0%..100%`，输出 `nebula-sim.mp4`、PNG 和 `report.json`。900 帧使用同一个仿真时钟，每帧推进 `1/60` 秒；60 FPS 是视频时间基准。`--allow-slow-render` 只解除开发机 GPU 耗时门禁，仍执行画面、时序和生命周期检查。
+命令行显示 `NEBULA_RENDER_PROGRESS`，输出 `nebula-sim.mp4`、首尾 PNG 和 `report.json`。900 帧使用同一个仿真时钟，每次接收最终帧前推进 `1/60` 秒。录制结束后由 FFprobe 校验编码尺寸、帧率和解码帧数。`--allow-slow-render` 只解除 GPU 耗时门禁，画面、时序和生命周期检查仍会执行。
 
 ## 代码与资源入口
 
