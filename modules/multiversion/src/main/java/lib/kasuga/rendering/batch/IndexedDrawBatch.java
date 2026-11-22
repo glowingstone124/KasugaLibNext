@@ -24,14 +24,16 @@ public final class IndexedDrawBatch {
     private final int drawCount;
     private final int maxIndirectDrawCount;
     private final boolean gpuVisibility;
+    private final boolean indirectCount;
 
     private IndexedDrawBatch(@Nullable GpuBufferSlice commands, List<Draw> direct, int drawCount, int maxIndirectDrawCount,
-                             boolean gpuVisibility) {
+                             boolean gpuVisibility, boolean indirectCount) {
         this.commands = commands;
         this.direct = direct;
         this.drawCount = drawCount;
         this.maxIndirectDrawCount = maxIndirectDrawCount;
         this.gpuVisibility = gpuVisibility;
+        this.indirectCount = indirectCount;
     }
 
     /**
@@ -54,7 +56,7 @@ public final class IndexedDrawBatch {
         int maxIndirectDrawCount = device.limits().maxDrawIndirectDrawCount();
         int drawCount = draws.size();
         if (drawCount < 2 || !features.drawIndirect() || !features.multiDrawIndirect() || maxIndirectDrawCount < 2) {
-            return new IndexedDrawBatch(null, List.copyOf(draws), drawCount, 0, false);
+            return new IndexedDrawBatch(null, List.copyOf(draws), drawCount, 0, false, false);
         }
 
         int bytes = Math.multiplyExact(drawCount, COMMAND_BYTES);
@@ -67,7 +69,7 @@ public final class IndexedDrawBatch {
             }
             commands = mapped.slice();
         }
-        return new IndexedDrawBatch(commands, List.of(), drawCount, maxIndirectDrawCount, false);
+        return new IndexedDrawBatch(commands, List.of(), drawCount, maxIndirectDrawCount, false, false);
     }
 
     /**
@@ -75,9 +77,10 @@ public final class IndexedDrawBatch {
      * must be in the same space. Use camera-relative coordinates for large worlds. On an encoder
      * without supported compute, cull on the CPU and select the regular indexed draw path.
      * Prepare before opening the render pass, and draw before the encoder is submitted.
-     * {@code -Dkasuga.disableVulkanCompute=true} selects CPU visibility on Vulkan as well.
-     * Surviving draws keep their original order. Shaders must not depend on the draw ID,
-     * which can differ when the CPU path removes hidden commands.
+     * Vulkan can compact visible commands and read the draw count on the GPU. With
+     * {@code -Dkasuga.disableVulkanDrawIndirectCount=true} it uses fixed-count compute instead.
+     * {@code -Dkasuga.disableVulkanCompute=true} selects CPU visibility.
+     * Surviving draws keep their original order. Shaders must be independent of the draw ID.
      */
     public static IndexedDrawBatch prepareVisible(CommandEncoder encoder, List<Candidate> candidates,
                                                   List<? extends Vector4fc> planes) {
@@ -95,8 +98,10 @@ public final class IndexedDrawBatch {
         int maxDraws = device.limits().maxDrawIndirectDrawCount();
         if (candidates.size() > 1 && !planes.isEmpty() && maxDraws > 1
                 && features.drawIndirect() && features.multiDrawIndirect() && features.nonZeroFirstInstance()) {
-            GpuBufferSlice commands = VulkanIndexedVisibility.prepare(encoder, candidates, planes);
-            if (commands != null) return new IndexedDrawBatch(commands, List.of(), candidates.size(), maxDraws, true);
+            VulkanIndexedVisibility.Prepared gpu = VulkanIndexedVisibility.prepare(encoder, candidates, planes, maxDraws);
+            if (gpu != null) {
+                return new IndexedDrawBatch(gpu.commands(), List.of(), candidates.size(), gpu.drawsPerSubmission(), true, gpu.counted());
+            }
         }
         List<Draw> visible = new ArrayList<>();
         for (Candidate candidate : candidates) {
@@ -107,6 +112,11 @@ public final class IndexedDrawBatch {
 
     public boolean usesGpuVisibility() {
         return gpuVisibility;
+    }
+
+    /** Whether this batch uses GPU-generated compacted commands and draw counts. */
+    public boolean usesIndirectCount() {
+        return indirectCount;
     }
 
     public boolean usesIndirect() {

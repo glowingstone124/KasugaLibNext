@@ -226,7 +226,10 @@ scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true
 Select the renderer with `-PkasugaHeadlessGraphics=vulkan` or
 `-PkasugaHeadlessGraphics=opengl`. The smoke run verifies world ticks and the
 final GUI pixel through `MinecraftFrameOutputs`, plus snapshot reallocation
-and HDR readback when the source color format changes.
+and HDR readback when the source color format changes. Indexed batch visibility
+uses GPU-generated draw counts when the Vulkan device supports them. Set
+`-Dkasuga.disableVulkanDrawIndirectCount=true` on the game JVM to use fixed-count
+compute, or `-Dkasuga.disableVulkanCompute=true` to force CPU visibility.
 Captures of the models, animation, lighting, held documents, and GUI previews
 are saved in the test game directory.
 

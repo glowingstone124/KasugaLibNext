@@ -7,21 +7,67 @@ layout(set = 0, binding = 0, std430) buffer Batch {
 layout(push_constant) uniform Volume {
     vec4 planes[6];
     uint candidateCount;
+    uint chunkSize;
 };
 
-void main() {
-    uint index = gl_GlobalInvocationID.x;
-    if (index >= candidateCount) return;
+shared uint prefix[64];
 
-    uint bounds = 5u * candidateCount + 4u * index;
+bool visible(uint index, uint boundsStart) {
+    uint bounds = boundsStart + 4u * index;
     vec3 center = vec3(uintBitsToFloat(words[bounds]), uintBitsToFloat(words[bounds + 1u]),
                        uintBitsToFloat(words[bounds + 2u]));
     float radius = uintBitsToFloat(words[bounds + 3u]);
     for (int plane = 0; plane < 6; ++plane) {
-        if (dot(planes[plane].xyz, center) + planes[plane].w < -radius - 0.0001) {
-            // Set instanceCount to zero. Keep the remaining draws in their original order.
-            words[5u * index + 1u] = 0u;
-            return;
-        }
+        if (dot(planes[plane].xyz, center) + planes[plane].w < -radius - 0.0001) return false;
+    }
+    return true;
+}
+
+void compactChunk() {
+    uint lane = gl_LocalInvocationID.x;
+    uint start = gl_WorkGroupID.x * chunkSize;
+    uint end = start + min(chunkSize, candidateCount - start);
+    uint first = start + 4u * lane;
+    // Buffer layout: compact commands, original commands, sphere bounds, one count per chunk.
+    uint inputStart = 5u * candidateCount;
+    uint boundsStart = 2u * inputStart;
+    uint mask = 0u;
+    for (uint i = 0u; i < 4u && first + i < end; ++i) {
+        if (visible(first + i, boundsStart)) mask |= 1u << i;
+    }
+
+    // Scan the per-lane counts to reserve an ordered output range for each lane.
+    uint visibleCount = uint(bitCount(mask));
+    prefix[lane] = visibleCount;
+    barrier();
+    for (uint step = 1u; step < gl_WorkGroupSize.x; step *= 2u) {
+        uint previous = lane >= step ? prefix[lane - step] : 0u;
+        barrier();
+        prefix[lane] += previous;
+        barrier();
+    }
+
+    uint dest = 5u * (start + prefix[lane] - visibleCount);
+    for (uint i = 0u; i < 4u; ++i) {
+        if ((mask & (1u << i)) == 0u) continue;
+        uint source = inputStart + 5u * (first + i);
+        for (uint word = 0u; word < 5u; ++word) words[dest + word] = words[source + word];
+        dest += 5u;
+    }
+    if (lane == gl_WorkGroupSize.x - 1u) {
+        words[boundsStart + 4u * candidateCount + gl_WorkGroupID.x] = prefix[lane];
+    }
+}
+
+void main() {
+    if (chunkSize != 0u) {
+        compactChunk();
+        return;
+    }
+
+    uint index = gl_GlobalInvocationID.x;
+    if (index < candidateCount && !visible(index, 5u * candidateCount)) {
+        // Set instanceCount to zero. Keep the remaining draws in their original order.
+        words[5u * index + 1u] = 0u;
     }
 }

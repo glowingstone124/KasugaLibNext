@@ -21,7 +21,11 @@
     "GuiWindowStateAccess",
     "HeadlessMinecraftMixin",
     "MinecraftFrameOutputMixin",
+    "VulkanBackendMixin",
     "VulkanDeviceCloseMixin",
+    "VulkanDeviceFeaturesAccess",
+    "VulkanFeatureSetsMixin",
+    "VulkanRenderPassMixin",
     "WorldUiGameRendererMixin",
     "WorldUiKeyboardMixin",
     "WorldUiTextInputMixin"

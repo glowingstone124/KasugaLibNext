@@ -8,9 +8,13 @@ import com.mojang.renderpearl.api.commands.CommandEncoder;
 import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.renderpearl.backend.vulkan.VulkanCommandEncoder;
 import com.mojang.renderpearl.backend.vulkan.VulkanDevice;
+import com.mojang.renderpearl.backend.vulkan.VulkanFeatureSets;
 import com.mojang.renderpearl.backend.vulkan.VulkanGpuBuffer;
 import com.mojang.renderpearl.backend.vulkan.VulkanUtils;
+import com.mojang.renderpearl.backend.vulkan.init.FeatureSet;
+import com.mojang.renderpearl.backend.vulkan.init.VulkanFeature;
 import lib.kasuga.core.rendering.mixin.FrontendGpuDeviceAccess;
+import lib.kasuga.core.rendering.mixin.VulkanDeviceFeaturesAccess;
 import org.joml.Vector4fc;
 import org.jspecify.annotations.Nullable;
 import org.lwjgl.PointerBuffer;
@@ -43,26 +47,39 @@ import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Set;
 
 import static org.lwjgl.util.shaderc.Shaderc.*;
 import static org.lwjgl.util.vma.Vma.*;
 import static org.lwjgl.vulkan.KHRPushDescriptor.*;
 import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK12.vkCmdDrawIndexedIndirectCount;
 
-/** RenderPearl 26.3 interop for the library's fixed visibility shader. */
+/** RenderPearl 26.3 interop for indexed batch visibility. */
 public final class VulkanIndexedVisibility {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final String SHADER = "/assets/kasuga_lib/shaders/compute/indexed_visibility.comp";
     private static final int GROUP_SIZE = 64;
-    private static final int CONSTANT_BYTES = (6 * 4 + 1) * Integer.BYTES;
+    private static final int COUNTED_DRAWS_PER_GROUP = 256; // 64 lanes × 4 consecutive candidates in the shader.
+    private static final int CONSTANT_BYTES = (6 * 4 + 2) * Integer.BYTES;
+    private static final FeatureSet INDIRECT_COUNT_FEATURE = new FeatureSet("Kasuga drawIndirectCount", Set.of(),
+            Set.of(new VulkanFeature(VulkanFeatureSets.VK12_FEATURES_STRUCT, "drawIndirectCount")));
     private static final int BYTES_PER_CANDIDATE = IndexedDrawBatch.COMMAND_BYTES + 4 * Float.BYTES;
     private static @Nullable VulkanDevice cachedDevice;
     private static @Nullable Pipeline cachedPipeline;
 
     private VulkanIndexedVisibility() {}
 
-    static @Nullable GpuBufferSlice prepare(CommandEncoder encoder, List<IndexedDrawBatch.Candidate> candidates,
-                                            List<? extends Vector4fc> planes) {
+    public static FeatureSet indirectCountFeature() {
+        return INDIRECT_COUNT_FEATURE;
+    }
+
+    public static boolean isIndirectCountDisabled() {
+        return Boolean.getBoolean("kasuga.disableVulkanDrawIndirectCount");
+    }
+
+    static @Nullable Prepared prepare(CommandEncoder encoder, List<IndexedDrawBatch.Candidate> candidates,
+                                      List<? extends Vector4fc> planes, int maxDraws) {
         if (Boolean.getBoolean("kasuga.disableVulkanCompute")) return null;
         GpuDevice active = RenderSystem.getDevice();
         if (encoder != active.createCommandEncoder() || !(active instanceof FrontendGpuDeviceAccess access)
@@ -77,17 +94,49 @@ public final class VulkanIndexedVisibility {
         VulkanCommandEncoder commands = device.createCommandEncoder();
         int count = candidates.size();
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            BatchBuffer buffer = allocateBatch(device, stack, count * BYTES_PER_CANDIDATE, candidates);
-            if (buffer == null) return null;
+            int chunkSize = Math.min(maxDraws, COUNTED_DRAWS_PER_GROUP);
+            int groups = Math.ceilDiv(count, chunkSize);
+            BatchBuffer buffer = null;
+            if (groups <= pipeline.maxDispatchGroups() && supportsIndirectCount(device)) {
+                long bytes = (long) count * (BYTES_PER_CANDIDATE + IndexedDrawBatch.COMMAND_BYTES)
+                        + (long) groups * Integer.BYTES;
+                if (bytes <= pipeline.maxBufferBytes()) {
+                    buffer = allocateBatch(device, stack, (int) bytes, candidates, chunkSize);
+                }
+            }
+            if (buffer == null) {
+                buffer = allocateBatch(device, stack, count * BYTES_PER_CANDIDATE, candidates, 0);
+                if (buffer == null) return null;
+            }
             // Keep the buffer valid while recording the draw. The host drains it after the submission.
             buffer.retireAfterSubmit();
             VkCommandBuffer command = commands.allocateAndBeginTransientCommandBuffer();
             record(command, stack, pipeline, buffer, count, planes);
             VulkanUtils.crashIfFailure(device, vkEndCommandBuffer(command), "Ending indexed visibility command buffer");
             commands.execute(command);
-            return buffer.slice(0, (long) count * IndexedDrawBatch.COMMAND_BYTES);
+            GpuBufferSlice slice = buffer.slice(0, (long) count * IndexedDrawBatch.COMMAND_BYTES);
+            boolean counted = buffer.chunkSize != 0;
+            return new Prepared(slice, counted ? buffer.chunkSize : maxDraws, counted);
         }
     }
+
+    private static boolean supportsIndirectCount(VulkanDevice device) {
+        return !isIndirectCountDisabled()
+                && ((VulkanDeviceFeaturesAccess) (Object) device).kasuga$enabledFeatures().contains(INDIRECT_COUNT_FEATURE)
+                && device.vkDevice().getCapabilities().vkCmdDrawIndexedIndirectCount != 0;
+    }
+
+    /** Called by the render-pass hook only after the host validates and binds the draw state. */
+    public static boolean tryDrawCounted(VkCommandBuffer command, GpuBufferSlice commands, int maxDrawCount, int stride) {
+        if (!(commands.buffer() instanceof BatchBuffer buffer) || buffer.chunkSize == 0) return false;
+        long chunk = commands.offset() / ((long) buffer.chunkSize * stride);
+        long countOffset = buffer.countsOffset + chunk * Integer.BYTES;
+        vkCmdDrawIndexedIndirectCount(command, buffer.vkBuffer(), commands.offset(), buffer.vkBuffer(), countOffset,
+                maxDrawCount, stride);
+        return true;
+    }
+
+    record Prepared(GpuBufferSlice commands, int drawsPerSubmission, boolean counted) {}
 
     /** Called by the host device close hook before it drains its graphics queue. */
     public static void release(VulkanDevice device) {
@@ -116,18 +165,20 @@ public final class VulkanIndexedVisibility {
             VkPhysicalDeviceLimits limits = properties.limits();
             if (limits.maxComputeWorkGroupInvocations() < GROUP_SIZE || limits.maxComputeWorkGroupSize(0) < GROUP_SIZE
                     || limits.maxPushConstantsSize() < CONSTANT_BYTES) return null;
-            long maxGroups = Integer.toUnsignedLong(limits.maxComputeWorkGroupCount(0));
+            int maxGroups = (int) Math.min(Integer.toUnsignedLong(limits.maxComputeWorkGroupCount(0)), Integer.MAX_VALUE);
             long maxRange = Integer.toUnsignedLong(limits.maxStorageBufferRange());
-            int capacity = (int) Math.min(maxGroups * GROUP_SIZE, Math.min(maxRange, Integer.MAX_VALUE) / BYTES_PER_CANDIDATE);
+            int maxBufferBytes = (int) Math.min(maxRange, Integer.MAX_VALUE);
+            int capacity = (int) Math.min((long) maxGroups * GROUP_SIZE, maxBufferBytes / BYTES_PER_CANDIDATE);
             if (capacity < 2) return null;
-            return createPipeline(device, stack, capacity);
+            return createPipeline(device, stack, capacity, maxBufferBytes, maxGroups);
         } catch (IOException | IllegalStateException error) {
             LOGGER.warn("Vulkan indexed visibility could not initialize. Using CPU visibility.", error);
             return null;
         }
     }
 
-    private static Pipeline createPipeline(VulkanDevice device, MemoryStack stack, int capacity) throws IOException {
+    private static Pipeline createPipeline(VulkanDevice device, MemoryStack stack, int capacity, int maxBufferBytes,
+                                           int maxDispatchGroups) throws IOException {
         VkDevice vk = device.vkDevice();
         long shader = createShader(device, stack);
         long descriptorLayout = 0;
@@ -159,7 +210,7 @@ public final class VulkanIndexedVisibility {
                 VulkanUtils.crashIfFailure(device, result, "Creating indexed visibility pipeline");
                 throw new IllegalStateException("Unexpected compute pipeline result " + result);
             }
-            return new Pipeline(pipeline, pipelineLayout, descriptorLayout, capacity);
+            return new Pipeline(pipeline, pipelineLayout, descriptorLayout, capacity, maxBufferBytes, maxDispatchGroups);
         } catch (RuntimeException | Error error) {
             if (pipelineLayout != 0) vkDestroyPipelineLayout(vk, pipelineLayout, null);
             if (descriptorLayout != 0) vkDestroyDescriptorSetLayout(vk, descriptorLayout, null);
@@ -198,7 +249,7 @@ public final class VulkanIndexedVisibility {
     }
 
     private static @Nullable BatchBuffer allocateBatch(VulkanDevice device, MemoryStack stack, int bytes,
-                                                       List<IndexedDrawBatch.Candidate> candidates) {
+                                                       List<IndexedDrawBatch.Candidate> candidates, int chunkSize) {
         VkBufferCreateInfo info = VkBufferCreateInfo.calloc(stack).sType$Default().size(bytes)
                 .usage(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT).sharingMode(VK_SHARING_MODE_EXCLUSIVE);
         VmaAllocationCreateInfo options = VmaAllocationCreateInfo.calloc(stack).usage(VMA_MEMORY_USAGE_AUTO)
@@ -210,13 +261,15 @@ public final class VulkanIndexedVisibility {
         int result = vmaCreateBuffer(device.vma(), info, options, handle, allocation, allocated);
         if (result == VK_ERROR_DEVICE_LOST) VulkanUtils.crashIfFailure(device, result, "Allocating indexed visibility commands");
         if (result != VK_SUCCESS) return null;
-        BatchBuffer buffer = new BatchBuffer(device, handle.get(0), allocation.get(0), bytes);
+        BatchBuffer buffer = new BatchBuffer(device, handle.get(0), allocation.get(0), bytes, chunkSize, candidates.size());
         try {
             if (allocated.pMappedData() == 0) {
                 buffer.destroy();
                 return null;
             }
             ByteBuffer data = MemoryUtil.memByteBuffer(allocated.pMappedData(), bytes);
+            // Counted draws write to a separate output region ahead of the original commands.
+            if (chunkSize != 0) data.position(candidates.size() * IndexedDrawBatch.COMMAND_BYTES);
             for (IndexedDrawBatch.Candidate candidate : candidates) candidate.draw().write(data);
             for (IndexedDrawBatch.Candidate candidate : candidates) {
                 data.putFloat(candidate.x()).putFloat(candidate.y()).putFloat(candidate.z()).putFloat(candidate.radius());
@@ -237,7 +290,8 @@ public final class VulkanIndexedVisibility {
             constants.putFloat(offset, plane.x()).putFloat(offset + 4, plane.y())
                     .putFloat(offset + 8, plane.z()).putFloat(offset + 12, plane.w());
         }
-        constants.putInt(CONSTANT_BYTES - Integer.BYTES, count);
+        constants.putInt(CONSTANT_BYTES - 2 * Integer.BYTES, count);
+        constants.putInt(CONSTANT_BYTES - Integer.BYTES, buffer.chunkSize);
         VkDescriptorBufferInfo.Buffer storage = VkDescriptorBufferInfo.calloc(1, stack);
         storage.buffer(buffer.vkBuffer()).offset(0).range(buffer.size());
         VkWriteDescriptorSet.Buffer descriptor = VkWriteDescriptorSet.calloc(1, stack);
@@ -246,7 +300,8 @@ public final class VulkanIndexedVisibility {
         vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.handle());
         vkCmdPushDescriptorSetKHR(command, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.layout(), 0, descriptor);
         vkCmdPushConstants(command, pipeline.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, constants);
-        vkCmdDispatch(command, (count + GROUP_SIZE - 1) / GROUP_SIZE, 1, 1);
+        int candidatesPerGroup = buffer.chunkSize == 0 ? GROUP_SIZE : buffer.chunkSize;
+        vkCmdDispatch(command, Math.ceilDiv(count, candidatesPerGroup), 1, 1);
 
         VkMemoryBarrier.Buffer barrier = VkMemoryBarrier.calloc(1, stack);
         barrier.sType$Default().srcAccessMask(VK_ACCESS_SHADER_WRITE_BIT).dstAccessMask(VK_ACCESS_INDIRECT_COMMAND_READ_BIT);
@@ -254,7 +309,8 @@ public final class VulkanIndexedVisibility {
                 0, barrier, null, null);
     }
 
-    private record Pipeline(long handle, long layout, long descriptors, int maxCandidates) {
+    private record Pipeline(long handle, long layout, long descriptors, int maxCandidates, int maxBufferBytes,
+                            int maxDispatchGroups) {
         void destroy(VkDevice device) {
             vkDestroyPipeline(device, handle, null);
             vkDestroyPipelineLayout(device, layout, null);
@@ -265,13 +321,17 @@ public final class VulkanIndexedVisibility {
     private static final class BatchBuffer extends VulkanGpuBuffer {
         private final VulkanDevice device;
         private final long allocation;
+        private final int chunkSize;
+        private final long countsOffset;
         private boolean retired;
         private boolean closed;
 
-        BatchBuffer(VulkanDevice device, long buffer, long allocation, long size) {
+        BatchBuffer(VulkanDevice device, long buffer, long allocation, long size, int chunkSize, int candidateCount) {
             super(buffer, GpuBuffer.USAGE_INDIRECT_PARAMETERS, size);
             this.device = device;
             this.allocation = allocation;
+            this.chunkSize = chunkSize;
+            this.countsOffset = (long) candidateCount * (BYTES_PER_CANDIDATE + IndexedDrawBatch.COMMAND_BYTES);
         }
 
         @Override public boolean isClosed() { return closed; }
