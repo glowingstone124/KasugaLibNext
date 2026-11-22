@@ -211,7 +211,8 @@ scripts/run-headless-client.sh -PkasugaMinecraft=26.3 -PkasugaTestHeadless=true
 
 Select the renderer with `-PkasugaHeadlessGraphics=vulkan` or
 `-PkasugaHeadlessGraphics=opengl`. The smoke run verifies world ticks and the
-final GUI pixel through `MinecraftFrameOutputs`.
+final GUI pixel through `MinecraftFrameOutputs`, plus snapshot reallocation
+and HDR readback when the source color format changes.
 Captures of the models, animation, lighting, held documents, and GUI previews
 are saved in the test game directory.
 

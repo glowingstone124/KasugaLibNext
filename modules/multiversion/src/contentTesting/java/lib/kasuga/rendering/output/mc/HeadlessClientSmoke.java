@@ -26,6 +26,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import org.lwjgl.sdl.SDLVideo;
 
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
 
 @EventBusSubscriber(modid = KasugaLib.MODID, value = Dist.CLIENT)
 public final class HeadlessClientSmoke {
@@ -38,6 +39,7 @@ public final class HeadlessClientSmoke {
     private static int delivered;
     private static RuntimeException failure;
     private static FrameOutputRouter<GpuTextureView>.Registration output;
+    private static CompletableFuture<Void> formatReadback;
 
     private HeadlessClientSmoke() {}
 
@@ -68,12 +70,15 @@ public final class HeadlessClientSmoke {
                 }
             });
             output = MinecraftFrameOutputs.open(FrameOutputMode.OFFSCREEN_ONLY, HeadlessClientSmoke::read);
+            formatReadback = FrameOutputFormatSmoke.verify();
             return;
         }
-        if (output == null || output.isClosed() || !sampled || delivered < 4 || client.level.getGameTime() <= initialTick) return;
+        if (output == null || !formatReadback.isDone()) return;
+        formatReadback.join();
+        if (output.isClosed() || !sampled || delivered < 4 || client.level.getGameTime() <= initialTick) return;
         checkPlatform(client);
         output.close();
-        LogUtils.getLogger().info("KASUGA_HEADLESS_PASS graphics={} driver={} hidden,unpresented,world-ticks,final-gui-readback",
+        LogUtils.getLogger().info("KASUGA_HEADLESS_PASS graphics={} driver={} hidden,unpresented,world-ticks,final-gui-readback,hdr-format-switch",
                 GRAPHICS, SDLVideo.SDL_GetCurrentVideoDriver());
         client.stop();
     }
