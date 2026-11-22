@@ -124,6 +124,12 @@ these resource formats, including PMX, PMD, and MMD ZIP archives with diffuse te
 texture aliases. Bedrock uses its first geometry by default.
 `KsgMinecraftJsonLoader.openBedrock` also accepts a geometry name and a texture
 override for files shared by multiple entities.
+Use `McModelAssemblies.open` to mount a resource-pack outfit as a movable scene
+node. Switch outfits in place or reload the pack while retaining compatible model
+pose inputs. See the [outfit resource reference](doc/reference/minecraft-model-assembly.en.md#minecraft-263).
+In item definitions, the `kasuga_lib:model` special renderer displays authored
+models through the native item pipeline. See the
+[item model reference](doc/reference/item-model-renderers.en.md#minecraft-263).
 Box3D physics blocks and configured ragdolls run with the standard model
 scheduler on both backends. In a client world, use `/kasuga_physics block` or
 `/kasuga_ragdoll deploy <model> <config>`.

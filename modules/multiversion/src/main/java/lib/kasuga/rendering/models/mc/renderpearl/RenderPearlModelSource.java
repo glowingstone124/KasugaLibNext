@@ -29,6 +29,7 @@ import org.joml.Matrix4d;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3f;
+import org.jspecify.annotations.Nullable;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -74,7 +75,16 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
 
     /** Opens model geometry and textures from the current resource pack stack. */
     public static RenderPearlModelSource open(Identifier identifier) throws IOException {
+        return open(identifier, null);
+    }
+
+    /** Selects a named entry when opening an MMD ZIP. */
+    public static RenderPearlModelSource open(Identifier identifier, @Nullable String modelName) throws IOException {
         String path = identifier.getPath();
+        if (modelName != null) {
+            if (!path.endsWith(".zip")) throw new IOException("A model name requires an MMD ZIP: " + identifier);
+            return KsgPmxLoader.openArchive(identifier, modelName);
+        }
         if (path.endsWith(".bbmodel")) return KsgBbModelLoader.open(identifier);
         if (path.endsWith(".gltf") || path.endsWith(".glb")) return KsgGltfLoader.open(identifier);
         if (path.endsWith(".pmx") || path.endsWith(".pmd") || path.endsWith(".zip")) return KsgPmxLoader.open(identifier);
@@ -140,6 +150,8 @@ public final class RenderPearlModelSource extends WorldDisplayTarget {
     public ModelInstance instance() { return model; }
 
     public ModelBounds bounds() { return bounds; }
+
+    public Identifier textureId(Texture texture) { return textures.apply(texture); }
 
     /** Captures this model's posed geometry for a non-world render target. */
     public Geometry captureGeometry(float partialTick, Object frameToken, int packedLight) {

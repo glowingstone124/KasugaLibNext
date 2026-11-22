@@ -127,6 +127,7 @@ def prepareModelSources = tasks.register('prepareModelSources', Sync) {
                 'lib/kasuga/rendering/models/mc/dynamic/ModelParticleRuntime.java',
                 'lib/kasuga/rendering/models/mc/component/LiveModelSync.java',
                 'lib/kasuga/rendering/models/mc/component/LiveModelSyncState.java',
+                'lib/kasuga/rendering/models/mc/source/model/assembly/AssemblyResourceDefinitions.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockPhysics.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRagdollEnvironment.java',
                 'lib/kasuga/rendering/models/mc/dynamic/physics/MinecraftBlockRigidBody.java',

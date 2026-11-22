@@ -3,11 +3,19 @@
 通用几何/骨架组装见 [Model Assembly](model-assembly.md)。本页只描述 Minecraft 的资源查找、
 发布和句柄接入，Model 及其公共子系统没有模型格式白名单。
 
+## Minecraft 26.3
+
+在客户端渲染线程调用 `McModelAssemblies.open(id)`，然后通过 `SceneModels.add(outfit, position)` 加入场景。
+用 `outfit.switchAssembly(id)` 切换当前穿搭，资源包重载时会自动重新装配。
+切换保留场景位置、兼容的骨骼与 morph 输入、IK、浮动原点和支持重绑的姿态驱动。
+自定义驱动和物理可在 `onInstanceChanged` 中重新绑定。场景关闭时会释放它持有的穿搭。
+示例见 [Minecraft 26.3](minecraft-model-assembly.en.md#minecraft-263)。
+
 ## 资源包定义
 
 文件放在 `assets/<namespace>/model_assemblies/<path>.json`，定义 ID 为 `<namespace>:<path>`。
 例如 `assets/example/model_assemblies/winter.json` 对应 `example:winter`。
-来源模型仍需通过已有 `model_proxy` 配置预加载，见 [模型加载](modelling/README.md)。
+26.3 直接从资源包加载来源模型。1.21.1 通过已有 `model_proxy` 配置预加载，见 [模型加载](modelling/README.md)。
 
 ```json
 {
@@ -53,7 +61,7 @@
 绑定矩阵、隐藏面范围等依赖实际模型的校验在完整来源就绪后执行。
 身体与衣服须已在同一绑定空间；这不是自动体型拟合接口。
 
-## McModelHandle
+## Minecraft 1.21.1 的 McModelHandle
 
 包：`lib.kasuga.rendering.models.mc.api`。
 

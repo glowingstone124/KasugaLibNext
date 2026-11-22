@@ -193,6 +193,7 @@ public final class RenderPearlClientSmoke {
             Minecraft client = Minecraft.getInstance();
             if (ModelInstancingSmoke.needsFrames()) ModelInstancingSmoke.afterFrame(client);
             else if (ModelDepthBiasSmoke.needsFrames()) ModelDepthBiasSmoke.afterFrame(client);
+            else if (ModelAssemblySmoke.needsFrames()) ModelAssemblySmoke.afterFrame(client);
             else if (MmdModelSmoke.needsFrames()) MmdModelSmoke.afterFrame(client);
             else if (RagdollSmoke.needsFrames()) RagdollSmoke.afterFrame(client);
             else if (StageSmoke.needsFrames()) StageSmoke.afterFrame(client);

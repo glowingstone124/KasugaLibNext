@@ -3,11 +3,30 @@
 For generic geometry/skeleton assembly see [Model Assembly](model-assembly.md). This page only describes Minecraft's resource lookup,
 publication and handle integration; Model and its generic subsystems have no model format allowlist.
 
+## Minecraft 26.3
+
+Open a resource-pack definition on the client render thread and add it to a `SceneModels` host.
+
+```java
+McModelAssemblies.Outfit outfit = McModelAssemblies.open(Identifier.parse("example:winter"));
+scene.add(outfit, position);
+boolean switched = outfit.switchAssembly(Identifier.parse("example:summer"));
+```
+
+The 26.3 loader opens the named source files directly. It shares assembled geometry and GPU textures within
+a resource generation. Each outfit has an independent model instance and inherits the scene's ownership,
+placement and visibility. If an outfit's replacement is missing or invalid, it keeps the current model.
+
+Switches and resource reloads preserve the node and migrate compatible bone, morph and IK inputs, floating origin,
+and rebindable pose drivers. Use `onInstanceChanged` to bind custom drivers or physics to the replacement.
+Closing the scene closes its outfits. Close an outfit explicitly when it has no owner.
+
 ## Resource pack definitions
 
 Files live in `assets/<namespace>/model_assemblies/<path>.json`, and the definition ID is `<namespace>:<path>`.
 For example `assets/example/model_assemblies/winter.json` corresponds to `example:winter`.
-Source models still have to be preloaded through the existing `model_proxy` configuration, see [model loading](modelling/README.md).
+On Minecraft 1.21.1, source models have to be preloaded through the existing `model_proxy` configuration.
+See [model loading](modelling/README.md).
 
 ```json
 {
@@ -53,7 +72,7 @@ and a partial outfit definition is not published. When sources are missing the d
 Validations that depend on the actual model, such as bind matrices and hidden face ranges, run after the full sources are ready.
 The body and the clothing must already be in the same bind space; this is not an automatic body-fitting interface.
 
-## McModelHandle
+## McModelHandle on Minecraft 1.21.1
 
 Package: `lib.kasuga.rendering.models.mc.api`.
 

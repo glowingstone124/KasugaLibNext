@@ -1,0 +1,15 @@
+{
+  "body": {
+    "model": "kasuga_lib:models/smoke/triangle.gltf",
+    "regions": {"front_and_back": [0, 1]},
+    "hide_regions": ["front_and_back"]
+  },
+  "parts": [
+    {
+      "id": "coat",
+      "model": "kasuga_lib:models/smoke/mmd/bundle.zip",
+      "model_name": "Nested/SAMPLE.PMX",
+      "match_body_bones": false
+    }
+  ]
+}

@@ -9,7 +9,6 @@ import lib.kasuga.KasugaLib;
 import lib.kasuga.core.resource.ClientResourceReloadFinishEvent;
 import lib.kasuga.rendering.models.mc.renderpearl.RenderPearlModelSource;
 import lib.kasuga.rendering.models.mc.scene.ModelBounds;
-import lib.kasuga.rendering.models.mc.typo.KsgPmxLoader;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.special.NoDataSpecialModelRenderer;
@@ -22,6 +21,7 @@ import net.neoforged.neoforge.client.event.RegisterSpecialModelRendererEvent;
 import net.neoforged.neoforge.event.GameShuttingDownEvent;
 import org.joml.Vector3f;
 import org.joml.Vector3fc;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -80,7 +80,7 @@ public final class ItemModelRenderer implements NoDataSpecialModelRenderer {
         }
     }
 
-    private RenderPearlModelSource source() {
+    private @Nullable RenderPearlModelSource source() {
         return SOURCES.computeIfAbsent(definition, Unbaked::open).orElse(null);
     }
 
@@ -100,8 +100,7 @@ public final class ItemModelRenderer implements NoDataSpecialModelRenderer {
 
         private Optional<RenderPearlModelSource> open() {
             try {
-                if (modelName.isPresent()) return Optional.of(KsgPmxLoader.openArchive(model, modelName.get()));
-                return Optional.of(RenderPearlModelSource.open(model));
+                return Optional.of(RenderPearlModelSource.open(model, modelName.orElse(null)));
             } catch (IOException | RuntimeException failure) {
                 LOGGER.warn("Could not open item model {} {}", model, modelName.orElse(""), failure);
                 return Optional.empty();
