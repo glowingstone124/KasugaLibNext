@@ -129,7 +129,10 @@ public final class CobaltBlueDemo {
         var mc = Minecraft.getInstance();
         requestAutoWorld(mc);
         if (!autoStarted && Boolean.getBoolean("kasuga.cobalt.auto") && mc.player != null && mc.level != null
-                && mc.getOverlay() == null && WaterEffects.ready()) autoStarted = start();
+                && mc.getOverlay() == null && WaterEffects.ready()) {
+            if (!start()) throw new IllegalStateException("Could not start the automatic Cobalt scene");
+            autoStarted = true;
+        }
         var current = session;
         if (current == null) return;
         if (mc.level == null || mc.player == null || mc.getSingleplayerServer() == null || mc.getSingleplayerServer().isPublished()) { stop(); return; }
@@ -174,14 +177,16 @@ public final class CobaltBlueDemo {
      */
     private static void autoDrive(Session current, Minecraft mc) {
         current.autoTicks++;
-        if (!current.autoGrabbed && current.autoTicks == 12 && current.sequence.phase() == CobaltSequence.Phase.WAITING) {
+        if (!current.autoGrabbed && current.autoTicks >= 12 && current.fade.alpha() <= .35f
+                && current.sequence.phase() == CobaltSequence.Phase.WAITING) {
             var direction = CobaltRoom.DISC.subtract(mc.player.getEyePosition()).normalize();
             current.autoGrabbed = current.props.grab(mc.player.getEyePosition(), direction, 6).isPresent();
             if (!current.autoGrabbed || !current.sequence.grab())
                 throw new IllegalStateException("Automatic physical record grab was rejected");
+            current.autoGrabTick = current.autoTicks;
             LOGGER.info("COBALT_BLUE_AUTO_GRAB physicsGrab={}", current.autoGrabbed);
         }
-        if (current.autoGrabbed && !current.autoInserted && current.autoTicks >= 30
+        if (current.autoGrabbed && !current.autoInserted && current.autoTicks >= current.autoGrabTick + 18
                 && current.sequence.phase() == CobaltSequence.Phase.HOLDING) {
             var aim = CobaltRoom.SLOT.subtract(mc.player.getEyePosition());
             mc.player.setYRot((float) Math.toDegrees(Math.atan2(-aim.x, aim.z)));
@@ -350,7 +355,7 @@ public final class CobaltBlueDemo {
         CobaltRoom room;
         boolean hideGuiBefore, silentBefore, uiCaptured;
         boolean autoGrabbed, autoInserted, autoPlayed, autoWaded, autoWaterLogged;
-        int autoTicks, autoReadyTicks, autoWadeTicks, autoFootstepsBeforeOcean;
+        int autoTicks, autoGrabTick, autoReadyTicks, autoWadeTicks, autoFootstepsBeforeOcean;
         Session(SceneTrack track) { this.track = track; footsteps = new CobaltFootsteps(); }
     }
 }

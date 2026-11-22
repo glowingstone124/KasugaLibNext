@@ -17,6 +17,7 @@ final class CobaltRoom {
     // feel suspended in a white volume before the walls unfold into the sea.
     static final int MIN_X = -16, MAX_X = 16, MIN_Z = -20, MAX_Z = 20;
     static final int FLOOR_Y = 64, BED_Y = FLOOR_Y - 1, CEILING_Y = 78;
+    static final float FLOOR_OPEN_SECONDS = 4.7f;
     static final BlockPos JUKEBOX = new BlockPos(0, 65, 0);
     static final Vec3 SOURCE = new Vec3(.5, 65.7, .5);
     static final Vec3 SLOT = new Vec3(.5, 66.43, .5);
@@ -71,7 +72,7 @@ final class CobaltRoom {
                     1.4f + (x + z + 13) * .04f, x > 0 ? 1 : -1, z > 0 ? 1 : -1, true);
         for (int z = MIN_Z; z <= MAX_Z; z += 3) for (int x = MIN_X; x <= MAX_X; x += 3) {
             panel(props, new BlockPos(x, FLOOR_Y, z), new BlockPos(Math.min(x + 2, MAX_X), FLOOR_Y, Math.min(z + 2, MAX_Z)),
-                    4.7f + ((x * 17 + z * 29 + 1000) % 19) * .08f, x > 0 ? 1 : -1, z > 0 ? 1 : -1, true);
+                    FLOOR_OPEN_SECONDS + ((x * 17 + z * 29 + 1000) % 19) * .08f, x > 0 ? 1 : -1, z > 0 ? 1 : -1, true);
         }
         panel(props, new BlockPos(-2, 65, 0), new BlockPos(-2, 65, 0), 4.3f, -1, 0, true);
     }

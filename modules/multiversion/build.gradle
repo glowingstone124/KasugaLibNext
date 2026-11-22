@@ -266,6 +266,10 @@ sourceSets {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
     }
+    cobaltDemo {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
     contentTesting {
         compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + sourceSets.blackHoleDemo.output + sourceSets.nebulaDemo.output
         runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath + sourceSets.blackHoleDemo.output + sourceSets.nebulaDemo.output
@@ -294,6 +298,60 @@ def prepareNebulaDemoSources = tasks.register('prepareNebulaDemoSources', Sync) 
     into layout.buildDirectory.dir('generated/sources/nebulaDemo/java')
 }
 sourceSets.nebulaDemo.java.srcDir(prepareNebulaDemoSources)
+
+def prepareCobaltDemoSources = tasks.register('prepareCobaltDemoSources', Sync) {
+    from(rootProject.file('modules/modelling/src/contentTesting/java')) {
+        include 'test/kasuga/modelling/demo/cobalt/CobaltBlueDemo.java',
+                'test/kasuga/modelling/demo/cobalt/CobaltBlueSmokeTest.java',
+                'test/kasuga/modelling/demo/cobalt/CobaltCoast.java',
+                'test/kasuga/modelling/demo/cobalt/CobaltFootsteps.java',
+                'test/kasuga/modelling/demo/cobalt/CobaltRoom.java',
+                'test/kasuga/modelling/demo/cobalt/CobaltSequence.java'
+    }
+    filter(updateMinecraftNames)
+    filesMatching('**/CobaltBlueDemo.java') {
+        filter { String line ->
+            line.replace('import net.minecraft.world.level.GameRules;', 'import net.minecraft.world.level.LevelSettings;')
+                    .replace('org.lwjgl.glfw.GLFW', 'com.mojang.blaze3d.platform.InputConstants')
+                    .replace('GLFW.GLFW_', 'InputConstants.')
+                    .replace('mc.getOverlay()', 'mc.gui.overlay()')
+                    .replace('mc.setScreen(', 'mc.gui.setScreen(')
+                    .replace('mc.screen', 'mc.gui.screen()')
+                    .replace('mc.options.hideGui = true;', 'if (!mc.gui.hud.isHidden()) mc.gui.hud.toggle();')
+                    .replace('mc.options.hideGui = previous.hideGuiBefore;',
+                            'if (mc.gui.hud.isHidden() != previous.hideGuiBefore) mc.gui.hud.toggle();')
+                    .replace('mc.options.hideGui', 'mc.gui.hud.isHidden()')
+                    .replace('player.displayClientMessage(Component.literal(message), false);',
+                            'player.sendSystemMessage(Component.literal(message));')
+                    .replace('new net.minecraft.world.level.LevelSettings(world, GameType.CREATIVE, false,',
+                            'new LevelSettings(world, GameType.CREATIVE,')
+                    .replace('Difficulty.NORMAL, true, new GameRules(), WorldDataConfiguration.DEFAULT);',
+                            'new LevelSettings.DifficultySettings(Difficulty.NORMAL, false, false), true, WorldDataConfiguration.DEFAULT);')
+                    .replace('"graal-shader-test"', '"cobalt-smoke-" + Long.toString(System.currentTimeMillis(), 36)')
+        }
+    }
+    filesMatching('**/CobaltRoom.java') {
+        filter { String line ->
+            line.replace('Blocks.WHITE_CONCRETE', 'Blocks.CONCRETE.pick(net.minecraft.world.item.DyeColor.WHITE)')
+        }
+    }
+    filesMatching('**/CobaltBlueSmokeTest.java') {
+        filter { String line -> line.replace('minecraft.options.hideGui', 'minecraft.gui.hud.isHidden()') }
+    }
+    into layout.buildDirectory.dir('generated/sources/cobaltDemo/java')
+}
+sourceSets.cobaltDemo.java.srcDir(prepareCobaltDemoSources)
+
+tasks.named('processCobaltDemoResources', ProcessResources) {
+    from(rootProject.file('modules/modelling/src/contentTesting/resources')) {
+        include 'assets/kasuga_demo/models/cobalt/**',
+                'assets/kasuga_demo/textures/cobalt/**',
+                'assets/kasuga_demo/cobalt_blue/**',
+                'assets/kasuga_demo/sounds/cobalt/**',
+                'assets/kasuga_lib/sounds.json',
+                'data/kasuga_demo/dimension/cobalt_blue_ocean.json'
+    }
+}
 
 tasks.named('processNebulaDemoResources', ProcessResources) {
     from(rootProject.file('modules/modelling/src/contentTesting/resources')) {
@@ -336,6 +394,7 @@ dependencies {
     compileOnly 'org.projectlombok:lombok:1.18.42'
     annotationProcessor 'org.projectlombok:lombok:1.18.42'
     contentTestingAnnotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
+    cobaltDemoAnnotationProcessor 'io.micronaut:micronaut-inject-java:4.9.10'
     api('io.micronaut:micronaut-inject:4.9.10') {
         exclude group: 'org.slf4j', module: 'slf4j-api'
     }
@@ -383,6 +442,13 @@ neoForge {
     version = project.neo_version_26_3
 
     runs {
+        configureEach {
+            if (providers.gradleProperty('kasugaCobaltAuto').getOrElse('false').toBoolean()) {
+                systemProperty 'kasuga.cobalt.auto', 'true'
+            }
+            def cobaltWorld = providers.gradleProperty('kasugaCobaltWorld')
+            if (cobaltWorld.isPresent()) systemProperty 'kasuga.cobalt.world', cobaltWorld.get()
+        }
         client {
             client()
             String graphicsSmoke = providers.gradleProperty('kasugaGraphicsSmoke').getOrElse('')
@@ -427,6 +493,7 @@ neoForge {
             sourceSet sourceSets.main
             sourceSet sourceSets.blackHoleDemo
             sourceSet sourceSets.nebulaDemo
+            sourceSet sourceSets.cobaltDemo
             if (headlessTest || !providers.gradleProperty('kasugaGraphicsSmoke').getOrElse('').isEmpty()) {
                 sourceSet sourceSets.contentTesting
             }

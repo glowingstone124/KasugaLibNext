@@ -1,9 +1,9 @@
 package test.kasuga.modelling.demo.cobalt;
 
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.logging.LogUtils;
 import lib.kasuga.scene.SceneGround;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.neoforged.api.distmarker.Dist;
@@ -22,15 +22,23 @@ import java.util.Set;
 final class CobaltBlueSmokeTest {
     private static final boolean ENABLED = Boolean.getBoolean("kasuga.cobalt.auto");
     private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
+    private static final long DEADLINE = System.nanoTime() + 150_000_000_000L;
     private static final Set<String> CAPTURED = new LinkedHashSet<>();
     private static CobaltBlueDemo.Session observed;
     private static boolean passed;
     private static boolean waterGateObserved;
+    private static int pendingCaptures;
+    private static RuntimeException captureFailure;
+    private static String wadingState = "waiting for water contact";
 
     private CobaltBlueSmokeTest() {}
 
     @SubscribeEvent public static void after(RenderFrameEvent.Post event) {
         if (!ENABLED || passed) return;
+        if (captureFailure != null) throw captureFailure;
+        if (System.nanoTime() >= DEADLINE) {
+            throw new IllegalStateException("Cobalt scene smoke timed out after " + CAPTURED + " with " + wadingState);
+        }
         var current = CobaltBlueDemo.session();
         if (current == null || current.props == null) {
             observed = null; CAPTURED.clear(); passed = false; return;
@@ -92,25 +100,27 @@ final class CobaltBlueSmokeTest {
                     bed = state;
                 }
             }
-            if (bedPosition == null)
-                throw new IllegalStateException("Cobalt blue wading path lost its authored terrain surface: " + bed);
-            if (!minecraft.level.getBlockState(bedPosition.above()).isAir()
+            if (bedPosition == null || !minecraft.level.getBlockState(bedPosition.above()).isAir()
                     || !minecraft.level.getBlockState(bedPosition.below()).isAir()
                     || !minecraft.player.onGround() || Math.abs(feet.y - collisionTop) > .08
                     || current.water.surfaceY() - feet.y < .05
-                    || current.water.surfaceY() >= minecraft.player.getEyeY())
-                throw new IllegalStateException("Cobalt blue feet are not submerged over the physical bed: feet="
-                        + feet + " terrain=" + collisionTop + " surface=" + current.water.surfaceY()
-                        + " grounded=" + minecraft.player.onGround());
+                    || current.water.surfaceY() >= minecraft.player.getEyeY()) {
+                // The client can still report the previous support height while crossing a block edge.
+                wadingState = "feet " + feet + " terrain " + collisionTop + " surface " + current.water.surfaceY()
+                        + " grounded " + minecraft.player.onGround();
+                return;
+            }
             if (current.voice == null || !current.voice.isPlaying())
                 throw new IllegalStateException("Cobalt blue music is not playing during the ocean phase");
-            if (current.beach == null || CobaltBeach.activeInstances() != 1)
-                throw new IllegalStateException("Cobalt blue custom-model beach is not mounted exactly once");
+            if (current.beach == null || !current.beach.hasDrawn() || CobaltBeach.activeInstances() != 1)
+                throw new IllegalStateException("Cobalt blue custom-model beach was not drawn by a single mount");
             if (!current.autoGrabbed || !current.autoInserted || !current.water.simulation().isFinite()
                     || current.water.simulation().maximumDeviation() < 1e-5)
                 throw new IllegalStateException("Cobalt blue physical grab, insertion or water simulation was not exercised");
             capture(current, phase, "06_cobalt_ocean_wade");
             if (!passed) {
+                if (pendingCaptures != 0) return;
+                if (captureFailure != null) throw captureFailure;
                 if (CAPTURED.size() != 7)
                     throw new IllegalStateException("Cobalt blue did not capture every required phase: " + CAPTURED);
                 int mountedAtCapture = CobaltBeach.activeInstances();
@@ -138,20 +148,23 @@ final class CobaltBlueSmokeTest {
 
     private static void capture(CobaltBlueDemo.Session current, CobaltSequence.Phase phase, String name) {
         if (!CAPTURED.add(name)) return;
-        var minecraft = Minecraft.getInstance();
-        try {
-            Path directory = minecraft.gameDirectory.toPath().resolve("screenshots").resolve("kasuga_cobalt_blue");
-            Files.createDirectories(directory);
-            try (var image = Screenshot.takeScreenshot(minecraft.getMainRenderTarget())) {
+        Minecraft minecraft = Minecraft.getInstance();
+        float fade = current.fade == null ? -1 : current.fade.alpha();
+        long interactions = current.water == null ? -1 : current.water.interactionCount();
+        pendingCaptures++;
+        CobaltFrameCapture.read(minecraft, frame -> {
+            try (NativeImage image = frame) {
+                Path directory = minecraft.gameDirectory.toPath().resolve("screenshots").resolve("kasuga_cobalt_blue");
+                Files.createDirectories(directory);
                 Path file = directory.resolve(name + ".png");
                 image.writeToFile(file);
                 if (phase == CobaltSequence.Phase.HOLDING || phase == CobaltSequence.Phase.READY) {
                     int blue = 0, samples = 0;
                     for (int y = image.getHeight() / 20; y < image.getHeight() * 9 / 20; y += 3) {
                         for (int x = image.getWidth() * 3 / 20; x < image.getWidth() * 17 / 20; x += 3) {
-                            int pixel = image.getPixelRGBA(x, y);
-                            int r = pixel & 255, g = pixel >>> 8 & 255, b = pixel >>> 16 & 255;
-                            if (b > r * 1.2 && b - r > 4 && b > g * 1.08) blue++;
+                            int pixel = CobaltFrameCapture.argb(image, x, y);
+                            int r = pixel >>> 16 & 255, g = pixel >>> 8 & 255, b = pixel & 255;
+                            if (b >= 28 && b - r > b * .35 && b - g > b * .18) blue++;
                             samples++;
                         }
                     }
@@ -160,11 +173,14 @@ final class CobaltBlueSmokeTest {
                                 + (double) blue / samples + " phase=" + phase + " file=" + file);
                 }
                 LOGGER.info("COBALT_BLUE_SMOKE_FRAME phase={} file={} size={}x{} fadeAlpha={} waterInteractions={}",
-                        phase, file, image.getWidth(), image.getHeight(), current.fade == null ? -1 : current.fade.alpha(),
-                        current.water == null ? -1 : current.water.interactionCount());
+                        phase, file, image.getWidth(), image.getHeight(), fade, interactions);
+            } catch (IOException failure) {
+                captureFailure = new IllegalStateException("Cannot save Cobalt blue evidence for " + phase, failure);
+            } catch (RuntimeException failure) {
+                captureFailure = failure;
+            } finally {
+                pendingCaptures--;
             }
-        } catch (IOException failure) {
-            throw new IllegalStateException("Cannot save Cobalt blue evidence for " + phase, failure);
-        }
+        });
     }
 }

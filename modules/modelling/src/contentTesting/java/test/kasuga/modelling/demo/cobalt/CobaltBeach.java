@@ -86,6 +86,8 @@ final class CobaltBeach implements AutoCloseable {
         return ACTIVE.get();
     }
 
+    boolean hasDrawn() { return coast.drawn; }
+
     @SubscribeEvent
     public static void registerPipelines(RegisterRenderPipelinesEvent event) {
         event.registrar(PIPELINE).world(RenderPipelineDescriptor.builder(id("beach_world"),
@@ -123,6 +125,7 @@ final class CobaltBeach implements AutoCloseable {
         private VertexArrayObject vao;
         private boolean closed;
         private boolean projectionProbeLogged;
+        private boolean drawn;
 
         private GpuCoast(ClientLevel level) {
             this.level = level;
@@ -187,6 +190,7 @@ final class CobaltBeach implements AutoCloseable {
                 GlslProgram.uniform(program, "ViewProjection", viewProjection);
                 vao.bind(0);
                 vao.drawArrays(GL11.GL_TRIANGLES, 0, vertexCount);
+                drawn = true;
             } finally {
                 if (vao != null && !vao.isClosed()) vao.unbind();
                 GL30.glBindVertexArray(previousVao);

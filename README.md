@@ -178,6 +178,10 @@ World-space black-hole lenses use the same shader path and respect world depth.
 The development command `/kasuga_black_hole demo` opens the bounded ray-traced demo.
 Use `/kasuga_nebula` in a private development world to run the OBJ/PBR starship
 and volume scene. Both graphics backends use the same flight and warp simulation.
+Use `/kasuga_cobalt_blue` in a private development world for the Cobalt room,
+physical record and coast scene. Prepare its positional track with
+`python3 scripts/cobalt-blue.py --music /path/to/track.flac`. The headless
+launcher accepts `-PkasugaCobaltAuto=true` to exercise and capture the full scene.
 The 26.3 core includes the scripting API, package discovery, engine registry, and resource
 reload lifecycle. To run JavaScript, build `./gradlew -PkasugaMinecraft=26.3 :external:slp:javet:assemble`
 and install the Javet `-all.jar` from `external/slp/javet/build/26.3/libs` alongside KasugaLib's `-all.jar`.
